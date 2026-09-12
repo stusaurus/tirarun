@@ -33,6 +33,7 @@
   let nextPattern = 0;
   let objects = [];
   let particles = [];
+  let pickupEffects = [];
   let collected = 0;
   let shake = 0;
   let flash = 0;
@@ -112,6 +113,7 @@
     nextPattern = W + 300;
     objects = [];
     particles = [];
+    pickupEffects = [];
     collected = 0;
     shake = 0;
     flash = 0;
@@ -125,11 +127,10 @@
     updateHud();
   }
 
-  function endGame() {
-    if (state !== 'playing') return;
+  function finishGame() {
+    if (state !== 'playing' && state !== 'damage') return;
     state = 'over';
-    shake = 12;
-    beep(120, .25, 'sawtooth', .06);
+    shake = 10;
     if (score > best) {
       best = score;
       localStorage.setItem(LS_BEST, String(best));
@@ -139,9 +140,21 @@
     resultEl.innerHTML = `SCORE ${score}<br><span style="font-size:15px;color:#6a7c75">BEST ${best}</span>`;
     subtitleEl.textContent = score >= best && score > 0 ? 'ベストスコアだノン！' : 'もう1回いくノン？';
     startBtn.textContent = 'もう一度あそぶ';
+    overlay.style.display = 'grid';
+  }
+
+  function beginDamageGameOver() {
+    if (state !== 'playing') return;
+    state = 'damage';
+    player.damageUntil = performance.now() + 560;
+    player.vy = 0;
+    shake = 11;
+    flash = .16;
+    beep(135, .22, 'sawtooth', .06);
+    burst(player.x + player.w * .72, player.y + player.h * .28, '#ffd85a', 10, 150);
     setTimeout(() => {
-      if (state === 'over') overlay.style.display = 'grid';
-    }, 500);
+      if (state === 'damage') finishGame();
+    }, 540);
   }
 
   function jump() {
@@ -345,8 +358,7 @@
           beep(240, .12, 'sawtooth', .05);
           continue;
         }
-        player.damageUntil = performance.now() + 500;
-        endGame();
+        beginDamageGameOver();
         return;
       }
 
@@ -369,6 +381,11 @@
       if (p.life <= 0) particles.splice(i, 1);
     }
 
+    for (let i = pickupEffects.length - 1; i >= 0; i--) {
+      pickupEffects[i].life -= dt;
+      if (pickupEffects[i].life <= 0) pickupEffects.splice(i, 1);
+    }
+
     shake = Math.max(0, shake - dt * 24);
     flash = Math.max(0, flash - dt);
     updateHud();
@@ -389,21 +406,35 @@
     }
   }
 
+  function pickupPop(o, color) {
+    pickupEffects.push({
+      item: o.item,
+      x: o.x + o.w / 2,
+      y: o.y + o.h / 2,
+      life: .34,
+      maxLife: .34,
+      color
+    });
+  }
+
   function collectItem(o) {
     if (o.item === 'shield') {
       player.shield = true;
+      pickupPop(o, '#8de8ff');
       beep(760, .11, 'sine', .04);
-      burst(o.x, o.y, '#8de8ff', 12, 130);
+      burst(o.x + o.w/2, o.y + o.h/2, '#8de8ff', 16, 145);
     }
     if (o.item === 'magnet') {
       player.magnet = 8;
+      pickupPop(o, '#ff9b9b');
       beep(520, .11, 'sine', .04);
-      burst(o.x, o.y, '#ef8d8d', 12, 130);
+      burst(o.x + o.w/2, o.y + o.h/2, '#ef8d8d', 16, 145);
     }
     if (o.item === 'giant') {
       player.giant = 6;
+      pickupPop(o, '#ffd27a');
       beep(250, .14, 'square', .04);
-      burst(o.x, o.y, '#9ae37d', 15, 150);
+      burst(o.x + o.w/2, o.y + o.h/2, '#ffd27a', 18, 165);
     }
   }
 
@@ -586,12 +617,12 @@
       ctx.beginPath();ctx.arc(0,0,p.w*.84,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;
     }
 
-    const spriteName = performance.now() < p.damageUntil
+    const spriteName = state === 'damage' || performance.now() < p.damageUntil
       ? 'damage'
       : airborne
         ? 'jump'
         : Math.floor(p.runT * 2.2) % 2 ? 'run1' : 'run2';
-    const visualSize = p.w * (spriteName === 'damage' ? 1.5 : 1.42);
+    const visualSize = p.w * (spriteName === 'damage' ? 1.72 : 1.68);
     if (drawSprite(spriteName, -visualSize/2, p.h/2-visualSize, visualSize, visualSize)) {
       ctx.restore();
       return;
@@ -641,6 +672,27 @@
     ctx.restore();
   }
 
+  function drawPickupEffects() {
+    for (const fx of pickupEffects) {
+      const progress = 1 - fx.life / fx.maxLife;
+      const pop = 1 + Math.sin(Math.PI * progress) * .28;
+      const base = 46;
+      const size = base * pop;
+      const alpha = Math.max(0, Math.min(1, fx.life / .18));
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.shadowColor = fx.color;
+      ctx.shadowBlur = 18;
+      ctx.strokeStyle = fx.color;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(fx.x, fx.y, 24 + progress * 18, 0, Math.PI * 2);
+      ctx.stroke();
+      drawSprite(fx.item, fx.x - size/2, fx.y - size/2, size, size);
+      ctx.restore();
+    }
+  }
+
   function draw() {
     ctx.save();
     if (shake > 0) ctx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);
@@ -662,6 +714,7 @@
       }
     }
 
+    drawPickupEffects();
     drawPlayer();
 
     for (const p of particles) {
