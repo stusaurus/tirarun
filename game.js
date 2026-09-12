@@ -39,10 +39,28 @@
   let muted = false;
   let audioCtx = null;
 
+  const spritePaths = {
+    run1: '1218B0FC-C2A9-4661-8707-C27D900A8992.png',
+    run2: 'BBCB72FB-8753-443F-8266-DE96E161B845.png',
+    jump: '611DD895-B471-4366-B1DC-231EF0F51CF8.png',
+    damage: 'DE619F5B-547D-4A02-866D-6E072FD3FF44.png',
+    kuri: 'A29A0A58-DA6B-49B8-AD9F-D595AE41741C.png',
+    shield: '55E5A798-2A2D-466B-9A4C-6B865812C4D9.png',
+    magnet: '43F86E52-798E-4091-ADAC-DEF03A44AD20.png',
+    giant: '5428AE5F-D105-4FC1-B217-9EDA0009D7C5.png'
+  };
+  const sprites = {};
+  for (const [name, src] of Object.entries(spritePaths)) {
+    const image = new Image();
+    image.decoding = 'async';
+    image.src = src;
+    sprites[name] = image;
+  }
+
   const player = {
     x: 88, y: 0, w: 48, h: 48, vy: 0, jumps: 0,
     shield: false, magnet: 0, giant: 0, fever: 0,
-    runT: 0, squash: 0
+    runT: 0, squash: 0, damageUntil: 0
   };
 
   const stages = [
@@ -99,7 +117,8 @@
     flash = 0;
     Object.assign(player, {
       y: groundY - 48, w:48, h:48, vy:0, jumps:0,
-      shield:false, magnet:0, giant:0, fever:0, runT:0, squash:0
+      shield:false, magnet:0, giant:0, fever:0, runT:0, squash:0,
+      damageUntil:0
     });
     overlay.style.display = 'none';
     resultEl.style.display = 'none';
@@ -122,7 +141,7 @@
     startBtn.textContent = 'もう一度あそぶ';
     setTimeout(() => {
       if (state === 'over') overlay.style.display = 'grid';
-    }, 300);
+    }, 500);
   }
 
   function jump() {
@@ -326,6 +345,7 @@
           beep(240, .12, 'sawtooth', .05);
           continue;
         }
+        player.damageUntil = performance.now() + 500;
         endGame();
         return;
       }
@@ -421,6 +441,16 @@
     ctx.roundRect(x,y,w,h,r);
   }
 
+  function drawSprite(name, x, y, w, h) {
+    const image = sprites[name];
+    if (!image || !image.complete || !image.naturalWidth) return false;
+    const scale = Math.min(w / image.naturalWidth, h / image.naturalHeight);
+    const dw = image.naturalWidth * scale;
+    const dh = image.naturalHeight * scale;
+    ctx.drawImage(image, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+    return true;
+  }
+
   function drawBackground() {
     const meters = Math.floor(distance / 18);
     const st = stages[Math.floor(meters / 450) % stages.length];
@@ -495,6 +525,8 @@
   }
 
   function drawKuri(o) {
+    const size = Math.max(o.w, o.h) * 1.34;
+    if (drawSprite('kuri', o.x + o.w/2 - size/2, o.y + o.h - size, size, size)) return;
     const cx=o.x+o.w/2, cy=o.y+o.h/2;
     ctx.save();
     ctx.translate(cx,cy);
@@ -551,7 +583,18 @@
     if(p.fever>0){ctx.shadowColor='#ffd33d';ctx.shadowBlur=18;}
     if(p.shield){
       ctx.strokeStyle='#8de8ff';ctx.lineWidth=5;ctx.globalAlpha=.7;
-      ctx.beginPath();ctx.arc(0,0,p.w*.68,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;
+      ctx.beginPath();ctx.arc(0,0,p.w*.84,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;
+    }
+
+    const spriteName = performance.now() < p.damageUntil
+      ? 'damage'
+      : airborne
+        ? 'jump'
+        : Math.floor(p.runT * 2.2) % 2 ? 'run1' : 'run2';
+    const visualSize = p.w * (spriteName === 'damage' ? 1.5 : 1.42);
+    if (drawSprite(spriteName, -visualSize/2, p.h/2-visualSize, visualSize, visualSize)) {
+      ctx.restore();
+      return;
     }
 
     ctx.fillStyle='#76cbb4';
@@ -608,11 +651,14 @@
       if (o.type==='kuri') drawKuri(o);
       if (o.type==='letter') drawBubble(o,o.letter,'#ffe48a');
       if (o.type==='item') {
-        drawBubble(
-          o,
-          o.item==='shield'?'S':o.item==='magnet'?'M':'G',
-          o.item==='shield'?'#bfeeff':o.item==='magnet'?'#ffd0d0':'#c9f2a9'
-        );
+        const pad = 6;
+        if (!drawSprite(o.item, o.x-pad, o.y-pad, o.w+pad*2, o.h+pad*2)) {
+          drawBubble(
+            o,
+            o.item==='shield'?'S':o.item==='magnet'?'M':'G',
+            o.item==='shield'?'#bfeeff':o.item==='magnet'?'#ffd0d0':'#c9f2a9'
+          );
+        }
       }
     }
 
