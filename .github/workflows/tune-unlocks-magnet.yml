@@ -1,0 +1,26 @@
+name: Tune unlocks and magnet
+
+on:
+  push:
+    paths:
+      - '.github/workflows/tune-unlocks-magnet.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tune progression and magnet
+        run: python3 .github/scripts/tune_unlocks_magnet.py
+      - name: Validate JavaScript
+        run: node --check game.js
+      - name: Commit tuning
+        run: |
+          git config user.name "stusaurus"
+          git config user.email "kiyo0625puma@yahoo.co.jp"
+          git add game.js index.html
+          git commit -m "gameplay: raise item unlock goals and strengthen magnet"
+          git push
