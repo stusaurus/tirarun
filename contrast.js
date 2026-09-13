@@ -1,11 +1,11 @@
 (() => {
   'use strict';
 
-  // Readability pass: push scenery back a little more and lift only Tiranon.
-  // Loaded after theme.js + visibility.js so gameplay logic and artwork stay untouched.
+  // This file must load BEFORE theme.js.
+  // theme.js captures drawImage at load time, so loading this first lets the
+  // contrast pass affect the scenery images that theme.js draws internally.
   const proto = CanvasRenderingContext2D.prototype;
-  const previousFillRect = proto.fillRect;
-  const previousDrawImage = proto.drawImage;
+  const nativeDrawImage = proto.drawImage;
 
   const playerSprites = [
     '1218B0FC-C2A9-4661-8707-C27D900A8992.png',
@@ -14,45 +14,56 @@
     'DE619F5B-547D-4A02-866D-6E072FD3FF44.png'
   ];
 
-  function isPlayerSprite(image) {
+  const scenerySprites = [
+    'A7BA4F1C-80DD-458C-9C82-CC34BACD83ED.png',
+    '045F6B8F-3A48-43DE-9D49-E5C8EAC312DD.png',
+    '210F6CF8-1C02-465D-B05F-A1299907CF78.png',
+    '306923B0-212A-4007-95CC-3C3C9004229A.png',
+    '413A55EB-0D5A-42A8-B2A9-B73004E49C9B.png',
+    '6F3A7A09-617A-4F5B-90F7-A87EB9CC86FF.png',
+    '89C0D311-B874-4C6C-94FE-FD1ECAE97BD3.png',
+    'D801606A-CB2D-40C8-A994-0B7A55654E8D.png'
+  ];
+
+  function hasSprite(image, names) {
     if (!image || typeof image.src !== 'string') return false;
-    return playerSprites.some(name => image.src.endsWith(name));
+    return names.some(name => image.src.endsWith(name));
   }
 
-  proto.fillRect = function(x, y, w, h) {
-    const fullCanvas =
-      x === 0 && y === 0 &&
-      w >= this.canvas.clientWidth * 0.9 &&
-      h >= this.canvas.clientHeight * 0.9;
-
-    const result = Reflect.apply(previousFillRect, this, arguments);
-
-    if (fullCanvas) {
-      // A slightly stronger neutral veil lowers the background tone without
-      // muddying the picture-book colors or changing gameplay elements.
-      this.save();
-      this.globalCompositeOperation = 'source-over';
-      this.fillStyle = 'rgba(34, 43, 41, 0.11)';
-      Reflect.apply(previousFillRect, this, [x, y, w, h]);
-      this.restore();
-    }
-
+  function drawWithFilter(ctx, image, args, filter) {
+    ctx.save();
+    const inherited = ctx.filter && ctx.filter !== 'none' ? `${ctx.filter} ` : '';
+    ctx.filter = `${inherited}${filter}`;
+    const result = Reflect.apply(nativeDrawImage, ctx, [image, ...args]);
+    ctx.restore();
     return result;
-  };
+  }
 
   proto.drawImage = function(image, ...args) {
-    if (!isPlayerSprite(image)) {
-      return Reflect.apply(previousDrawImage, this, [image, ...args]);
+    if (hasSprite(image, playerSprites)) {
+      // Pull Tiranon forward without creating a white sticker-like outline.
+      return drawWithFilter(
+        this,
+        image,
+        args,
+        'brightness(1.16) saturate(1.10) contrast(1.04)'
+      );
     }
 
-    // Lift Tiranon one more step relative to the scenery while keeping the
-    // mint body, yellow spines and facial features natural rather than glowing.
-    this.save();
-    const previousFilter = this.filter;
-    this.filter = 'brightness(1.13) saturate(1.09) contrast(1.035)';
-    const result = Reflect.apply(previousDrawImage, this, [image, ...args]);
-    this.filter = previousFilter;
-    this.restore();
-    return result;
+    if (hasSprite(image, scenerySprites)) {
+      const ratio = image.naturalWidth && image.naturalHeight
+        ? image.naturalWidth / image.naturalHeight
+        : 1;
+
+      // Vertical assets are stage backgrounds, so push them back more.
+      // Ground/platform/decor stay a little stronger so gameplay remains readable.
+      const filter = ratio <= 0.85
+        ? 'brightness(0.84) saturate(0.76) contrast(0.97)'
+        : 'brightness(0.90) saturate(0.82) contrast(0.99)';
+
+      return drawWithFilter(this, image, args, filter);
+    }
+
+    return Reflect.apply(nativeDrawImage, this, [image, ...args]);
   };
 })();
