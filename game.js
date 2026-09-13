@@ -28,8 +28,15 @@
   const shopCloseBtn = document.getElementById('shopCloseBtn');
   const shopCoinsEl = document.getElementById('shopCoins');
   const shopSlotsEl = document.getElementById('shopSlots');
+  const shopRankEl = document.getElementById('shopRank');
   const shopItemsEl = document.getElementById('shopItems');
   const shopNoteEl = document.getElementById('shopNote');
+  const userHudEl = document.getElementById('userHud');
+  const profileLevelEl = document.getElementById('profileLevel');
+  const profileGemsEl = document.getElementById('profileGems');
+  const profileTotalEl = document.getElementById('profileTotal');
+  const profileNextEl = document.getElementById('profileNext');
+  const profileProgressEl = document.getElementById('profileProgress');
 
   const WORD = 'TIRAKURI';
   const LS_BEST = 'tirakuri-best-v2';
@@ -38,6 +45,9 @@
   const LS_OWNED = 'tirakuri-owned-v1';
   const LS_LEVELS = 'tirakuri-levels-v1';
   const LS_LOADOUT = 'tirakuri-loadout-v1';
+  const LS_TOTAL_SCORE = 'tirakuri-total-score-v1';
+  const LS_USER_LEVEL = 'tirakuri-user-level-v1';
+  const LS_GEMS = 'tirakuri-gems-v1';
 
   function readJson(key, fallback) {
     try {
@@ -48,31 +58,58 @@
     }
   }
 
+  function userLevelThreshold(level) {
+    if (level <= 1) return 0;
+    return Math.round((4000 * Math.pow(level - 1, 1.55)) / 500) * 500;
+  }
+
+  function userLevelFromScore(total) {
+    let level = 1;
+    while (level < 99 && total >= userLevelThreshold(level + 1)) level++;
+    return level;
+  }
+
+  function gemRewardForLevel(level) {
+    return level > 1 && level % 5 === 0 ? 3 : 1;
+  }
+
+  function gemsThroughLevel(level) {
+    let total = 0;
+    for (let lv = 2; lv <= level; lv++) total += gemRewardForLevel(lv);
+    return total;
+  }
+
   let best = Number(localStorage.getItem(LS_BEST) || 0);
   let wallet = Math.max(0, Number(localStorage.getItem(LS_COINS) || 0));
   let totalRuns = Math.max(0, Number(localStorage.getItem(LS_RUNS) || 0));
+  const storedTotalScore = localStorage.getItem(LS_TOTAL_SCORE);
+  let totalScore = Math.max(0, Number(storedTotalScore === null ? best : storedTotalScore) || 0);
+  const calculatedUserLevel = userLevelFromScore(totalScore);
+  let userLevel = Math.max(calculatedUserLevel, Number(localStorage.getItem(LS_USER_LEVEL) || 1) || 1);
+  const storedGems = localStorage.getItem(LS_GEMS);
+  let gems = Math.max(0, Number(storedGems === null ? gemsThroughLevel(userLevel) : storedGems) || 0);
   let runCoins = 0;
   let owned = readJson(LS_OWNED, {shield:true, magnet:true, giant:true, roar:false, slow:false, wing:false});
   let levels = readJson(LS_LEVELS, {shield:1, magnet:1, giant:1, roar:0, slow:0, wing:0});
   let loadout = readJson(LS_LOADOUT, ['shield','magnet','giant']);
 
   const ITEM_CATALOG = {
-    shield: {name:'シールド', icon:'🛡️', desc:'1回だけ栗を防ぐ', basic:true, maxLevel:1},
-    magnet: {name:'マグネット', icon:'🧲', desc:'近くのコインだけを引き寄せる', basic:true, maxLevel:1},
-    giant: {name:'巨大化', icon:'🍖', desc:'大きくなって栗を壊す', basic:true, maxLevel:1},
+    shield: {name:'シールド', icon:'🛡️', desc:'1回だけ栗を防ぐ', basic:true, rank:0, maxLevel:1},
+    magnet: {name:'マグネット', icon:'🧲', desc:'近くのコインだけを引き寄せる', basic:true, rank:0, maxLevel:1},
+    giant: {name:'巨大化', icon:'🍖', desc:'大きくなって栗を壊す', basic:true, rank:0, maxLevel:1},
     roar: {
       name:'ガオー！', icon:'🗣️', desc:'咆哮で前方の栗をまとめて吹き飛ばす',
-      price:300, unlockBest:3500, unlockRuns:3, maxLevel:5,
+      price:300, rank:1, maxLevel:5,
       upgradeCosts:[180,400,800,1400]
     },
     slow: {
       name:'タイムどんぐり', icon:'⏳', desc:'数秒間、栗とステージの流れをスローにする',
-      price:500, unlockBest:7500, unlockRuns:8, maxLevel:5,
+      price:500, rank:1, maxLevel:5,
       upgradeCosts:[300,650,1200,2000]
     },
     wing: {
       name:'プテランの羽', icon:'🪽', desc:'一定時間ふわっと浮いて、落下をゆっくりにする',
-      price:750, unlockBest:13000, unlockRuns:15, maxLevel:5,
+      price:750, rank:1, maxLevel:5,
       upgradeCosts:[420,850,1500,2400]
     }
   };
@@ -89,13 +126,47 @@
     localStorage.setItem(LS_OWNED, JSON.stringify(owned));
     localStorage.setItem(LS_LEVELS, JSON.stringify(levels));
     localStorage.setItem(LS_LOADOUT, JSON.stringify(loadout));
+    localStorage.setItem(LS_TOTAL_SCORE, String(totalScore));
+    localStorage.setItem(LS_USER_LEVEL, String(userLevel));
+    localStorage.setItem(LS_GEMS, String(gems));
+  }
+
+  function rankItems(rank) {
+    return Object.entries(ITEM_CATALOG)
+      .filter(([, item]) => !item.basic && (item.rank || 1) === rank)
+      .map(([id]) => id);
+  }
+
+  function isRankComplete(rank) {
+    const ids = rankItems(rank);
+    return ids.length > 0 && ids.every(id => !!owned[id]);
+  }
+
+  function currentItemRank() {
+    let rank = 1;
+    while (rank < 20 && isRankComplete(rank)) rank++;
+    return rank;
   }
 
   function isItemUnlocked(id) {
     const item = ITEM_CATALOG[id];
     if (!item) return false;
     if (item.basic) return true;
-    return best >= (item.unlockBest || 0) && totalRuns >= (item.unlockRuns || 0);
+    return (item.rank || 1) <= currentItemRank();
+  }
+
+  function updateProfileUi() {
+    const nextThreshold = userLevelThreshold(userLevel + 1);
+    const currentThreshold = userLevelThreshold(userLevel);
+    const span = Math.max(1, nextThreshold - currentThreshold);
+    const progress = userLevel >= 99 ? 1 : Math.max(0, Math.min(1, (totalScore - currentThreshold) / span));
+    if (userHudEl) userHudEl.textContent = `USER Lv.${userLevel}　💎 ${gems}`;
+    if (profileLevelEl) profileLevelEl.textContent = `USER Lv.${userLevel}`;
+    if (profileGemsEl) profileGemsEl.textContent = `💎 ${gems}`;
+    if (profileTotalEl) profileTotalEl.textContent = `累計SCORE ${totalScore.toLocaleString()}`;
+    if (profileNextEl) profileNextEl.textContent = userLevel >= 99 ? 'MAX LEVEL' : `次Lvまで ${(nextThreshold - totalScore).toLocaleString()}`;
+    if (profileProgressEl) profileProgressEl.style.width = `${Math.round(progress * 100)}%`;
+    if (shopRankEl) shopRankEl.textContent = `ITEM RANK ${currentItemRank()}`;
   }
 
   function isEquipped(id) {
@@ -189,6 +260,7 @@
   }
 
   bestEl.textContent = '/ ' + best;
+  updateProfileUi();
 
   let W = 390;
   let H = 700;
@@ -359,22 +431,23 @@
     pausePanel.hidden = true;
     pauseBtn.hidden = true;
     shake = 10;
-    const unlockBefore = new Set(
-      Object.keys(ITEM_CATALOG).filter(id => !ITEM_CATALOG[id].basic && isItemUnlocked(id))
-    );
+    const oldUserLevel = userLevel;
     const newBest = score > best;
     if (newBest) {
       best = score;
       localStorage.setItem(LS_BEST, String(best));
     }
     totalRuns += 1;
+    totalScore += score;
+    userLevel = Math.max(userLevel, userLevelFromScore(totalScore));
+    let earnedGems = 0;
+    for (let lv = oldUserLevel + 1; lv <= userLevel; lv++) earnedGems += gemRewardForLevel(lv);
+    gems += earnedGems;
     const earnedCoins = runCoins;
     wallet += earnedCoins;
     runCoins = 0;
     saveProgress();
-    const newlyUnlocked = Object.entries(ITEM_CATALOG)
-      .filter(([id, item]) => !item.basic && !unlockBefore.has(id) && isItemUnlocked(id) && !owned[id])
-      .map(([id, item]) => ({id, item}));
+    updateProfileUi();
     bestEl.textContent = '/ ' + best;
     resultEl.style.display = 'block';
     const comboLine = comboPeak >= 3
@@ -383,12 +456,11 @@
     const coinLine = `<br><span style="font-size:15px;color:#9a7119">🪙 +${earnedCoins}　所持 ${wallet}</span>`;
     const nextRemain = Math.max(0, nextScoreGoal - score);
     const nextLine = `<br><span style="font-size:13px;color:#7b6845">NEXT ${nextScoreGoal.toLocaleString()}まで あと${nextRemain.toLocaleString()}</span>`;
-    const unlockNames = newlyUnlocked.map(x => `「${x.item.name}」`).join('・');
-    const unlockLine = newlyUnlocked.length
-      ? `<br><span style="font-size:14px;color:#d66f2c">NEW! ${unlockNames}がショップに入荷！</span>`
-      : '';
-    resultEl.innerHTML = `SCORE ${score}<br><span style="font-size:15px;color:#6a7c75">BEST ${best}</span>${comboLine}${coinLine}${nextLine}${unlockLine}`;
-    subtitleEl.textContent = newlyUnlocked.length ? '新しいアイテムを解放したノン！' : newBest ? 'ベストスコアだノン！' : 'もう1回いくノン？';
+    const levelLine = earnedGems > 0
+      ? `<br><span style="font-size:14px;color:#7d62bd">LEVEL UP! USER Lv.${userLevel}　💎 +${earnedGems}</span>`
+      : `<br><span style="font-size:12px;color:#7d7892">USER Lv.${userLevel}　累計SCORE ${totalScore.toLocaleString()}</span>`;
+    resultEl.innerHTML = `SCORE ${score}<br><span style="font-size:15px;color:#6a7c75">BEST ${best}</span>${comboLine}${coinLine}${nextLine}${levelLine}`;
+    subtitleEl.textContent = earnedGems > 0 ? 'ユーザーレベルが上がったノン！' : newBest ? 'ベストスコアだノン！' : 'もう1回いくノン？';
     startBtn.textContent = 'もう一度あそぶ';
     renderShop();
     overlay.style.display = 'grid';
@@ -396,8 +468,12 @@
 
   function renderShop() {
     if (!shopItemsEl) return;
-    shopCoinsEl.textContent = `🪙 ${wallet}`;
+    const rank = currentItemRank();
+    const currentRankIds = rankItems(rank);
+    const rankOwned = currentRankIds.filter(id => !!owned[id]).length;
+    shopCoinsEl.textContent = `🪙 ${wallet}　💎 ${gems}`;
     shopSlotsEl.textContent = `装備 ${loadout.length} / 5`;
+    if (shopRankEl) shopRankEl.textContent = `ITEM RANK ${rank}`;
     shopItemsEl.innerHTML = Object.entries(ITEM_CATALOG).map(([id, item]) => {
       const unlocked = isItemUnlocked(id);
       const has = !!owned[id];
@@ -405,16 +481,18 @@
       const lv = itemLevel(id);
       let stateText = '';
       if (!unlocked) {
-        stateText = `🔒 BEST ${Math.min(best,item.unlockBest || 0)}/${item.unlockBest || 0}・PLAY ${Math.min(totalRuns,item.unlockRuns || 0)}/${item.unlockRuns || 0}`;
+        stateText = `🔒 ITEM RANK ${item.rank || 1}`;
       } else if (!has) {
-        stateText = `ショップ入荷中　🪙${item.price}`;
+        stateText = `ITEM RANK ${item.rank || 1}　好きな順で解放OK　🪙${item.price}`;
+      } else if (item.basic) {
+        stateText = '初期アイテム';
       } else {
-        stateText = item.maxLevel > 1 ? `Lv.${Math.max(1,lv)} / ${item.maxLevel}` : '基本アイテム';
+        stateText = `R${item.rank || 1}・Lv.${Math.max(1,lv)} / ${item.maxLevel}`;
       }
 
       let actions = '';
       if (unlocked && !has) {
-        actions = `<button data-action="buy" data-id="${id}" ${wallet < item.price ? 'disabled' : ''}>購入 🪙${item.price}</button>`;
+        actions = `<button data-action="buy" data-id="${id}" ${wallet < item.price ? 'disabled' : ''}>解放 🪙${item.price}</button>`;
       } else if (has) {
         actions = `<button data-action="equip" data-id="${id}" class="${equipped?'equipped':''}">${equipped?'装備中 ✓':'装備する'}</button>`;
         if (item.maxLevel > 1 && lv < item.maxLevel) {
@@ -424,13 +502,13 @@
       }
       return `<div class="shopItem ${unlocked?'':'locked'}"><div class="shopIcon">${item.icon}</div><div class="shopInfo"><strong>${item.name}</strong><small>${item.desc}</small><em>${stateText}</em><div class="shopActions">${actions}</div></div></div>`;
     }).join('');
-    const nextLocked = Object.entries(ITEM_CATALOG).find(([id, item]) => !item.basic && !isItemUnlocked(id));
-    if (nextLocked) {
-      const [, item] = nextLocked;
-      shopNoteEl.textContent = `次の入荷：${item.name}　BEST ${item.unlockBest} ＋ PLAY ${item.unlockRuns}回`;
+
+    if (currentRankIds.length) {
+      shopNoteEl.textContent = `ITEM RANK ${rank}　${rankOwned}/${currentRankIds.length} 解放。好きなアイテムから選べるノン！ 全部解放でRANK ${rank+1}へ。`;
     } else {
-      shopNoteEl.textContent = '購入したアイテムから最大5つまで装備できるノン！';
+      shopNoteEl.textContent = `ITEM RANK ${rank}まで到達！ RANK ${rank}の新アイテムは今後追加予定だノン。`;
     }
+    updateProfileUi();
     updateHud();
   }
 
@@ -540,14 +618,20 @@
     if (!item) return;
     if (btn.dataset.action === 'buy') {
       if (!isItemUnlocked(id) || owned[id] || wallet < item.price) return;
+      const rankBefore = currentItemRank();
       wallet -= item.price;
       owned[id] = true;
       levels[id] = Math.max(1, itemLevel(id));
       const hadRoom = loadout.length < 5;
       if (hadRoom && !loadout.includes(id)) loadout.push(id);
       saveProgress();
+      const rankAfter = currentItemRank();
       renderShop();
-      if (!hadRoom) shopNoteEl.textContent = '購入したノン！ 装備枠が5つ埋まっているので、1つ外してから装備してね。';
+      if (rankAfter > rankBefore) {
+        shopNoteEl.textContent = `RANK ${rankBefore} COMPLETE! ITEM RANK ${rankAfter} が解放されたノン！`;
+      } else if (!hadRoom) {
+        shopNoteEl.textContent = '解放したノン！ 装備枠が5つ埋まっているので、1つ外してから装備してね。';
+      }
       return;
     }
     if (btn.dataset.action === 'equip') {
@@ -1199,6 +1283,7 @@
     scoreEl.textContent = score;
     bestEl.textContent = '/ ' + Math.max(best, score);
     coinHudEl.textContent = `🪙 ${wallet + runCoins}`;
+    if (userHudEl) userHudEl.textContent = `USER Lv.${userLevel}　💎 ${gems}`;
     if (goalHudEl) {
       const remain = Math.max(0, nextScoreGoal - score);
       if (recordChase && runBestAtStart > 0 && score <= runBestAtStart) {

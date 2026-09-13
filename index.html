@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
   <meta name="theme-color" content="#dff7ef" />
   <title>ティラクリ | ワンタップラン</title>
-  <link rel="stylesheet" href="./style.css?v=20260913-2245" />
+  <link rel="stylesheet" href="./style.css?v=20260913-2310" />
 </head>
 <body>
 <div id="wrap">
@@ -16,6 +16,7 @@
       <small>SCORE / BEST</small>
       <strong id="score">0</strong> <span id="best">/ 0</span>
       <div id="coinHud">🪙 0</div>
+      <div id="userHud">USER Lv.1　💎 0</div>
       <div id="goalHud">NEXT 1,500　あと 1,500</div>
     </div>
     <div id="rightHud">
@@ -47,6 +48,11 @@
     <div id="card">
       <h1>ティラ<span class="kuri">クリ</span></h1>
       <div id="subtitle">ワンタップで、どこまでいける？</div>
+      <div id="profileBar">
+        <div class="profileTop"><strong id="profileLevel">USER Lv.1</strong><span id="profileGems">💎 0</span></div>
+        <div class="profileMeta"><span id="profileTotal">累計SCORE 0</span><span id="profileNext">次Lvまで 4,000</span></div>
+        <div class="profileTrack"><i id="profileProgress"></i></div>
+      </div>
       <div id="result"></div>
       <div id="message">
         ティラノンは自動で走るノン！<br>
@@ -58,13 +64,13 @@
         <button id="shopBtn">🛒 ショップ</button>
       </div>
       <div id="tips">
-        コインを集めて新アイテムを購入・強化！<br>
-        アイテムは最大5つまで装備できるノン
+        コインで好きなアイテムを解放・強化！<br>
+        累計スコアでUSER Lvが上がると💎がもらえるノン
       </div>
     </div>
     <div id="shopPanel" hidden>
       <div class="shopHead">
-        <div><strong>ティラクリショップ</strong><small id="shopSlots">装備 3 / 5</small></div>
+        <div><strong>ティラクリショップ</strong><small id="shopSlots">装備 3 / 5</small><small id="shopRank">ITEM RANK 1</small></div>
         <div><span id="shopCoins">🪙 0</span><button id="shopCloseBtn" aria-label="ショップを閉じる">×</button></div>
       </div>
       <div id="shopItems"></div>
@@ -72,9 +78,9 @@
     </div>
   </div>
 </div>
-<script src="./theme.js?v=20260913-2245"></script>
-<script src="./visibility.js?v=20260913-2245"></script>
-<script src="./contrast.js?v=20260913-2245"></script>
-<script src="./game.js?v=20260913-2245"></script>
+<script src="./theme.js?v=20260913-2310"></script>
+<script src="./visibility.js?v=20260913-2310"></script>
+<script src="./contrast.js?v=20260913-2310"></script>
+<script src="./game.js?v=20260913-2310"></script>
 </body>
 </html>
