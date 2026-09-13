@@ -15,10 +15,86 @@
   const magnetBuff = document.getElementById('magnetBuff');
   const giantBuff = document.getElementById('giantBuff');
   const feverBuff = document.getElementById('feverBuff');
+  const coinHudEl = document.getElementById('coinHud');
+  const cardEl = document.getElementById('card');
+  const shopBtn = document.getElementById('shopBtn');
+  const shopPanel = document.getElementById('shopPanel');
+  const shopCloseBtn = document.getElementById('shopCloseBtn');
+  const shopCoinsEl = document.getElementById('shopCoins');
+  const shopSlotsEl = document.getElementById('shopSlots');
+  const shopItemsEl = document.getElementById('shopItems');
+  const shopNoteEl = document.getElementById('shopNote');
 
   const WORD = 'TIRAKURI';
   const LS_BEST = 'tirakuri-best-v2';
+  const LS_COINS = 'tirakuri-coins-v1';
+  const LS_RUNS = 'tirakuri-runs-v1';
+  const LS_OWNED = 'tirakuri-owned-v1';
+  const LS_LEVELS = 'tirakuri-levels-v1';
+  const LS_LOADOUT = 'tirakuri-loadout-v1';
+
+  function readJson(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch (_) {
+      return fallback;
+    }
+  }
+
   let best = Number(localStorage.getItem(LS_BEST) || 0);
+  let wallet = Math.max(0, Number(localStorage.getItem(LS_COINS) || 0));
+  let totalRuns = Math.max(0, Number(localStorage.getItem(LS_RUNS) || 0));
+  let runCoins = 0;
+  let owned = readJson(LS_OWNED, {shield:true, magnet:true, giant:true, roar:false});
+  let levels = readJson(LS_LEVELS, {shield:1, magnet:1, giant:1, roar:0});
+  let loadout = readJson(LS_LOADOUT, ['shield','magnet','giant']);
+
+  const ITEM_CATALOG = {
+    shield: {name:'シールド', icon:'🛡️', desc:'1回だけ栗を防ぐ', basic:true, maxLevel:1},
+    magnet: {name:'マグネット', icon:'🧲', desc:'近くのアイテムを引き寄せる', basic:true, maxLevel:1},
+    giant: {name:'巨大化', icon:'🍖', desc:'大きくなって栗を壊す', basic:true, maxLevel:1},
+    roar: {
+      name:'ガオー！', icon:'🗣️', desc:'咆哮で前方の栗をまとめて吹き飛ばす',
+      price:300, unlockBest:2000, unlockRuns:3, maxLevel:5,
+      upgradeCosts:[180,400,800,1400]
+    }
+  };
+
+  owned = Object.assign({shield:true, magnet:true, giant:true, roar:false}, owned || {});
+  owned.shield = owned.magnet = owned.giant = true;
+  levels = Object.assign({shield:1, magnet:1, giant:1, roar:0}, levels || {});
+  loadout = Array.isArray(loadout) ? loadout.filter((id, i, a) => ITEM_CATALOG[id] && owned[id] && a.indexOf(id) === i).slice(0,5) : [];
+  if (!loadout.length) loadout = ['shield','magnet','giant'];
+
+  function saveProgress() {
+    localStorage.setItem(LS_COINS, String(wallet));
+    localStorage.setItem(LS_RUNS, String(totalRuns));
+    localStorage.setItem(LS_OWNED, JSON.stringify(owned));
+    localStorage.setItem(LS_LEVELS, JSON.stringify(levels));
+    localStorage.setItem(LS_LOADOUT, JSON.stringify(loadout));
+  }
+
+  function isItemUnlocked(id) {
+    const item = ITEM_CATALOG[id];
+    if (!item) return false;
+    if (item.basic) return true;
+    return best >= (item.unlockBest || 0) && totalRuns >= (item.unlockRuns || 0);
+  }
+
+  function isEquipped(id) {
+    return !!owned[id] && loadout.includes(id);
+  }
+
+  function itemLevel(id) {
+    return Math.max(0, Number(levels[id] || 0));
+  }
+
+  function pickEquipped(allowed) {
+    const pool = allowed.filter(isEquipped);
+    return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+  }
+
   bestEl.textContent = '/ ' + best;
 
   let W = 390;
@@ -51,7 +127,6 @@
   let eventBannerTimer = 0;
   let rushWarpTimer = 0;
   let roarFx = 0;
-  let roarIntroduced = false;
   const RUSH_WARP_DURATION = .95;
   const ROAR_FX_DURATION = .65;
 
@@ -143,7 +218,7 @@
     eventBannerTimer = 0;
     rushWarpTimer = 0;
     roarFx = 0;
-    roarIntroduced = false;
+    runCoins = 0;
     Object.assign(player, {
       y: groundY - 48, w:48, h:48, vy:0, jumps:0,
       shield:false, invincible:0, magnet:0, giant:0, fever:0, runT:0, squash:0,
@@ -158,19 +233,79 @@
     if (state !== 'playing' && state !== 'damage') return;
     state = 'over';
     shake = 10;
-    if (score > best) {
+    const roarWasUnlocked = isItemUnlocked('roar');
+    const newBest = score > best;
+    if (newBest) {
       best = score;
       localStorage.setItem(LS_BEST, String(best));
     }
+    totalRuns += 1;
+    wallet += runCoins;
+    saveProgress();
+    const roarNowUnlocked = isItemUnlocked('roar');
+    const unlockedRoar = !roarWasUnlocked && roarNowUnlocked && !owned.roar;
     bestEl.textContent = '/ ' + best;
     resultEl.style.display = 'block';
     const comboLine = comboPeak >= 3
       ? `<br><span style="font-size:13px;color:#8a6b3d">MAX COMBO ${comboPeak}</span>`
       : '';
-    resultEl.innerHTML = `SCORE ${score}<br><span style="font-size:15px;color:#6a7c75">BEST ${best}</span>${comboLine}`;
-    subtitleEl.textContent = score >= best && score > 0 ? 'ベストスコアだノン！' : 'もう1回いくノン？';
+    const coinLine = `<br><span style="font-size:15px;color:#9a7119">🪙 +${runCoins}　所持 ${wallet}</span>`;
+    const unlockLine = unlockedRoar
+      ? `<br><span style="font-size:14px;color:#d66f2c">NEW! 「ガオー！」がショップに入荷！</span>`
+      : '';
+    resultEl.innerHTML = `SCORE ${score}<br><span style="font-size:15px;color:#6a7c75">BEST ${best}</span>${comboLine}${coinLine}${unlockLine}`;
+    subtitleEl.textContent = unlockedRoar ? '新しいアイテムを解放したノン！' : newBest ? 'ベストスコアだノン！' : 'もう1回いくノン？';
     startBtn.textContent = 'もう一度あそぶ';
+    renderShop();
     overlay.style.display = 'grid';
+  }
+
+  function renderShop() {
+    if (!shopItemsEl) return;
+    shopCoinsEl.textContent = `🪙 ${wallet}`;
+    shopSlotsEl.textContent = `装備 ${loadout.length} / 5`;
+    shopItemsEl.innerHTML = Object.entries(ITEM_CATALOG).map(([id, item]) => {
+      const unlocked = isItemUnlocked(id);
+      const has = !!owned[id];
+      const equipped = isEquipped(id);
+      const lv = itemLevel(id);
+      let stateText = '';
+      if (!unlocked) {
+        stateText = `🔒 BEST ${Math.min(best,item.unlockBest || 0)}/${item.unlockBest || 0}・PLAY ${Math.min(totalRuns,item.unlockRuns || 0)}/${item.unlockRuns || 0}`;
+      } else if (!has) {
+        stateText = `ショップ入荷中　🪙${item.price}`;
+      } else {
+        stateText = item.maxLevel > 1 ? `Lv.${Math.max(1,lv)} / ${item.maxLevel}` : '基本アイテム';
+      }
+
+      let actions = '';
+      if (unlocked && !has) {
+        actions = `<button data-action="buy" data-id="${id}" ${wallet < item.price ? 'disabled' : ''}>購入 🪙${item.price}</button>`;
+      } else if (has) {
+        actions = `<button data-action="equip" data-id="${id}" class="${equipped?'equipped':''}">${equipped?'装備中 ✓':'装備する'}</button>`;
+        if (item.maxLevel > 1 && lv < item.maxLevel) {
+          const cost = item.upgradeCosts[Math.max(0,lv-1)];
+          actions += `<button data-action="upgrade" data-id="${id}" ${wallet < cost ? 'disabled' : ''}>強化 🪙${cost}</button>`;
+        }
+      }
+      return `<div class="shopItem ${unlocked?'':'locked'}"><div class="shopIcon">${item.icon}</div><div class="shopInfo"><strong>${item.name}</strong><small>${item.desc}</small><em>${stateText}</em><div class="shopActions">${actions}</div></div></div>`;
+    }).join('');
+    shopNoteEl.textContent = isItemUnlocked('roar')
+      ? '新アイテムは購入後、最大5つまで装備できるノン！'
+      : `次の入荷：ガオー！　BEST 2000 ＋ PLAY 3回`;
+    updateHud();
+  }
+
+  function openShop() {
+    if (state === 'playing' || state === 'damage') return;
+    renderShop();
+    cardEl.style.display = 'none';
+    shopPanel.hidden = false;
+  }
+
+  function closeShop() {
+    shopPanel.hidden = true;
+    cardEl.style.display = 'block';
   }
 
   function resetCombo() {
@@ -244,11 +379,57 @@
 
   canvas.addEventListener('pointerdown', input, {passive:false});
   overlay.addEventListener('pointerdown', e => {
-    if (e.target === muteBtn || e.target === startBtn) return;
+    if (e.target.closest && e.target.closest('#shopPanel,#shopBtn,#startBtn,#mute')) return;
     input(e);
   }, {passive:false});
   startBtn.addEventListener('pointerdown', e => e.stopPropagation());
-  startBtn.addEventListener('click', e => { e.stopPropagation(); reset(); });
+  startBtn.addEventListener('click', e => { e.stopPropagation(); closeShop(); reset(); });
+  shopBtn.addEventListener('pointerdown', e => e.stopPropagation());
+  shopBtn.addEventListener('click', e => { e.stopPropagation(); openShop(); });
+  shopCloseBtn.addEventListener('pointerdown', e => e.stopPropagation());
+  shopCloseBtn.addEventListener('click', e => { e.stopPropagation(); closeShop(); });
+  shopPanel.addEventListener('pointerdown', e => e.stopPropagation());
+  shopItemsEl.addEventListener('click', e => {
+    const btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    const item = ITEM_CATALOG[id];
+    if (!item) return;
+    if (btn.dataset.action === 'buy') {
+      if (!isItemUnlocked(id) || owned[id] || wallet < item.price) return;
+      wallet -= item.price;
+      owned[id] = true;
+      levels[id] = Math.max(1, itemLevel(id));
+      if (loadout.length < 5 && !loadout.includes(id)) loadout.push(id);
+      saveProgress();
+      renderShop();
+      return;
+    }
+    if (btn.dataset.action === 'equip') {
+      if (!owned[id]) return;
+      if (loadout.includes(id)) {
+        loadout = loadout.filter(x => x !== id);
+      } else if (loadout.length < 5) {
+        loadout.push(id);
+      } else {
+        shopNoteEl.textContent = '装備できるアイテムは5つまでだノン！';
+        return;
+      }
+      saveProgress();
+      renderShop();
+      return;
+    }
+    if (btn.dataset.action === 'upgrade') {
+      const lv = itemLevel(id);
+      if (!owned[id] || lv >= item.maxLevel) return;
+      const cost = item.upgradeCosts[lv-1];
+      if (wallet < cost) return;
+      wallet -= cost;
+      levels[id] = lv + 1;
+      saveProgress();
+      renderShop();
+    }
+  });
   addEventListener('keydown', input, {passive:false});
   muteBtn.addEventListener('pointerdown', e => e.stopPropagation());
   muteBtn.addEventListener('click', e => {
@@ -276,6 +457,13 @@
   }
   function addItem(x, y, item) {
     objects.push({type:'item', item, x, y, w:34, h:34});
+  }
+  function addEquippedItem(x, y, allowed) {
+    const item = pickEquipped(allowed);
+    if (item) addItem(x, y, item);
+  }
+  function addCoin(x, y, value=1) {
+    objects.push({type:'coin', x, y, w:22, h:22, value});
   }
   function addBonus(x, y, value=1, routeCue=false) {
     const premium = value > 1;
@@ -326,7 +514,7 @@
       if (!objects.some(o => o.type === 'letter') && Math.random() < .35) {
         addLetter(x + 277, groundY - 236);
       } else if (Math.random() < .30) {
-        addItem(x + 285, groundY - 218, Math.random() < .55 ? 'magnet' : 'shield');
+        addEquippedItem(x + 285, groundY - 218, ['magnet','shield']);
       }
     } else if (id === 7) {
       addPlatform(x, groundY - 58, 90);
@@ -335,7 +523,7 @@
       addBonus(x + 210, groundY - 188, 2, true);
       addBonus(x + 252, groundY - 201, 2);
       addBonus(x + 294, groundY - 188, 2);
-      if (Math.random() < .34) addItem(x + 255, groundY - 236, Math.random() < .5 ? 'shield' : 'magnet');
+      if (Math.random() < .34) addEquippedItem(x + 255, groundY - 236, ['shield','magnet']);
       addChestnut(x + 340, groundY - 34, 1);
     } else if (id === 8) {
       addChestnut(x, groundY - 35, 1.0);
@@ -352,7 +540,7 @@
       addBonus(x + 245, groundY - 221, 2);
       addBonus(x + 296, groundY - 206, 2);
       if (!objects.some(o => o.type === 'letter') && Math.random() < .42) addLetter(x + 302, groundY - 248);
-      if (Math.random() < .72) addItem(x + 334, groundY - 212, Math.random() < .52 ? 'magnet' : 'shield');
+      if (Math.random() < .72) addEquippedItem(x + 334, groundY - 212, ['magnet','shield']);
     }
 
     const letterAlreadyOnScreen = objects.some(o => o.type === 'letter');
@@ -360,19 +548,23 @@
       addLetter(x + 55 + Math.random() * 130, groundY - (145 + Math.random() * 85));
     }
 
-    if (!roarIntroduced && distance > 2400) {
-      addItem(x + 68, groundY - 118, 'roar');
-      roarIntroduced = true;
-    } else if (Math.random() < .035) {
+    if (Math.random() < .58) {
+      const n = 3 + Math.floor(Math.random() * 3);
+      const baseY = groundY - 88 - Math.random() * 42;
+      for (let i=0; i<n; i++) {
+        addCoin(x + 34 + i*36, baseY - Math.sin(i / Math.max(1,n-1) * Math.PI) * 30, 1);
+      }
+    }
+
+    if (isEquipped('roar') && Math.random() < .04) {
       addItem(x + 70 + Math.random() * 90, groundY - (105 + Math.random() * 65), 'roar');
     }
 
     if (Math.random() < .095) {
-      const q = Math.random();
-      addItem(
+      addEquippedItem(
         x + 95 + Math.random() * 70,
         groundY - (125 + Math.random() * 90),
-        q < .45 ? 'shield' : q < .75 ? 'magnet' : 'giant'
+        ['shield','magnet','giant']
       );
     }
 
@@ -408,7 +600,7 @@
       addPlatform(x + 95, groundY - 142, 230);
       for (let i=0; i<6; i++) addBonus(x + 116 + i*43, groundY - 180 - Math.sin(i/5*Math.PI)*30, 2, i === 0);
       if (!objects.some(o => o.type === 'letter') && Math.random() < .38) addLetter(x + 287, groundY - 228);
-      if (Math.random() < .48) addItem(x + 320, groundY - 190, Math.random() < .5 ? 'magnet' : 'shield');
+      if (Math.random() < .48) addEquippedItem(x + 320, groundY - 190, ['magnet','shield']);
     } else {
       for (let i=0; i<6; i++) addBonus(x + i*50, groundY - 95 - Math.sin(i/5*Math.PI)*48);
       if (Math.random() < .28 && !objects.some(o => o.type === 'letter')) addLetter(x + 250, groundY - 170);
@@ -573,7 +765,7 @@
 
     if (player.magnet > 0 || player.fever > 0 || eventMode === 'bonus') {
       for (const o of objects) {
-        if (o.type !== 'letter' && o.type !== 'item' && o.type !== 'bonus') continue;
+        if (o.type !== 'letter' && o.type !== 'item' && o.type !== 'bonus' && o.type !== 'coin') continue;
         if (o.type === 'bonus' && o.premium && eventMode === 'bonus' && player.magnet <= 0 && player.fever <= 0) continue;
         const cx = o.x + o.w / 2;
         const cy = o.y + o.h / 2;
@@ -637,9 +829,10 @@
         return;
       }
 
-      if ((o.type === 'letter' || o.type === 'item' || o.type === 'bonus') && rectHit(pbox, o, -2)) {
+      if ((o.type === 'letter' || o.type === 'item' || o.type === 'bonus' || o.type === 'coin') && rectHit(pbox, o, -2)) {
         if (o.type === 'letter') collectLetter(o);
         else if (o.type === 'item') collectItem(o);
+        else if (o.type === 'coin') collectCoin(o);
         else collectBonus(o);
         objects.splice(i, 1);
         continue;
@@ -678,6 +871,15 @@
     shake = Math.max(0, shake - dt * 24);
     flash = Math.max(0, flash - dt);
     updateHud();
+  }
+
+  function collectCoin(o) {
+    const gain = Math.max(1, Number(o.value || 1));
+    runCoins += gain;
+    scoreFloat += 5 * gain;
+    score = Math.floor(scoreFloat);
+    burst(o.x + o.w/2, o.y + o.h/2, '#ffd34e', 7, 90);
+    beep(760 + Math.min(5, runCoins % 6) * 28, .028, 'sine', .014);
   }
 
   function collectLetter(o) {
@@ -734,24 +936,31 @@
       burst(o.x + o.w/2, o.y + o.h/2, '#ffd27a', 18, 165);
     }
     if (o.item === 'roar') {
+      const lv = Math.max(1, itemLevel('roar'));
       roarFx = ROAR_FX_DURATION;
       let blasted = 0;
+      const reach = W + 80 + lv * 55;
       for (const target of objects) {
         if (target.type !== 'kuri') continue;
-        if (target.x < player.x - 45 || target.x > W + 160) continue;
+        if (target.x < player.x - 45 || target.x > reach) continue;
         target.type = 'cleared';
         blasted++;
-        burst(target.x + target.w/2, target.y + target.h/2, '#ffb45f', 11, 185);
+        burst(target.x + target.w/2, target.y + target.h/2, '#ffb45f', 11 + lv, 185 + lv*8);
       }
-      const gain = blasted * 35;
+      const gainPer = 25 + lv * 10;
+      const gain = blasted * gainPer;
+      const coinBonus = lv >= 4 ? Math.floor(blasted / 2) : 0;
+      runCoins += coinBonus;
+      if (lv >= 3) player.invincible = Math.max(player.invincible, .35 + lv * .13);
       scoreFloat += gain;
       score = Math.floor(scoreFloat);
-      shake = Math.max(shake, 5);
+      shake = Math.max(shake, 5 + lv*.5);
       flash = Math.max(flash, .07);
-      burst(player.x + player.w*.72, player.y + player.h*.38, '#ffe29a', 18, 185);
-      popText(blasted ? `ガオーー！ 栗${blasted}個！ +${gain}` : 'ガオーー！', W*.5, H*.34, '#ffe09a', 1.0, 23);
+      burst(player.x + player.w*.72, player.y + player.h*.38, '#ffe29a', 18 + lv*2, 185 + lv*10);
+      const coinText = coinBonus ? ` 🪙+${coinBonus}` : '';
+      popText(blasted ? `ガオーー！ 栗${blasted}個！ +${gain}${coinText}` : 'ガオーー！', W*.5, H*.34, '#ffe09a', 1.0, 23);
       beep(150, .16, 'sawtooth', .045);
-      setTimeout(() => beep(260, .12, 'square', .03), 80);
+      setTimeout(() => beep(260 + lv*18, .12, 'square', .03), 80);
     }
   }
 
@@ -772,6 +981,7 @@
   function updateHud() {
     scoreEl.textContent = score;
     bestEl.textContent = '/ ' + Math.max(best, score);
+    coinHudEl.textContent = `🪙 ${wallet + runCoins}`;
     let html = '';
     for (let i=0; i<WORD.length; i++) {
       html += `<span style="color:${i<collected?'#f39b22':'#61766f'};opacity:${i<collected?1:.55}">${WORD[i]}</span>${i<WORD.length-1?' ':''}`;
@@ -951,6 +1161,27 @@
     ctx.fillText(label,o.x+o.w/2,o.y+o.h/2+1);
   }
 
+  function drawCoin(o) {
+    const cx = o.x + o.w/2;
+    const cy = o.y + o.h/2;
+    ctx.save();
+    ctx.shadowColor = '#ffcf3d';
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = '#ffd54d';
+    ctx.beginPath();
+    ctx.arc(cx, cy, o.w*.46, 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = '#f39a27';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#fff3a0';
+    ctx.font = '900 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('C', cx, cy+.5);
+    ctx.restore();
+  }
+
   function drawBonus(o) {
     const cx = o.x + o.w/2;
     const cy = o.y + o.h/2;
@@ -1057,6 +1288,33 @@
     ctx.restore();
   }
 
+  function drawLoadoutCosmetics() {
+    if (!isEquipped('roar')) return;
+    const lv = Math.max(1, itemLevel('roar'));
+    const bob = player.y + player.h >= groundY - 2 ? Math.sin(player.runT)*2 : 0;
+    const x = player.x + player.w*.61;
+    const y = player.y + player.h*.55 + bob;
+    ctx.save();
+    ctx.shadowColor = '#ff9e3d';
+    ctx.shadowBlur = lv >= 3 ? 10 : 5;
+    ctx.fillStyle = lv >= 5 ? '#ffd35a' : '#f5a544';
+    ctx.beginPath();
+    ctx.arc(x, y, 5 + Math.min(2,lv*.35), 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = '#fff1b0';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(x+1, y, 9 + lv, -.65, .65);
+    ctx.stroke();
+    if (lv >= 4) {
+      ctx.beginPath();
+      ctx.arc(x+2, y, 13 + lv, -.55, .55);
+      ctx.globalAlpha = .65;
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function drawPickupEffects() {
     for (const fx of pickupEffects) {
       const progress = 1 - fx.life / fx.maxLife;
@@ -1073,7 +1331,13 @@
       ctx.beginPath();
       ctx.arc(fx.x, fx.y, 24 + progress * 18, 0, Math.PI * 2);
       ctx.stroke();
-      drawSprite(fx.item, fx.x - size/2, fx.y - size/2, size, size);
+      if (!drawSprite(fx.item, fx.x - size/2, fx.y - size/2, size, size) && fx.item === 'roar') {
+        ctx.fillStyle = '#8d4b20';
+        ctx.font = '900 13px system-ui';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('ガオ', fx.x, fx.y);
+      }
       ctx.restore();
     }
   }
@@ -1253,6 +1517,7 @@
       if (o.type==='kuri') drawKuri(o);
       if (o.type==='letter') drawBubble(o,o.letter,'#ffe48a');
       if (o.type==='bonus') drawBonus(o);
+      if (o.type==='coin') drawCoin(o);
       if (o.type==='item') {
         const pad = 6;
         if (!drawSprite(o.item, o.x-pad, o.y-pad, o.w+pad*2, o.h+pad*2)) {
@@ -1267,6 +1532,7 @@
 
     drawPickupEffects();
     drawPlayer();
+    drawLoadoutCosmetics();
     drawRoarEffect();
     drawRushWarpEffect();
 

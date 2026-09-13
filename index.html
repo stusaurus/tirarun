@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
   <meta name="theme-color" content="#dff7ef" />
   <title>ティラクリ | ワンタップラン</title>
-  <link rel="stylesheet" href="./style.css?v=20260913-1855" />
+  <link rel="stylesheet" href="./style.css?v=20260913-2008" />
 </head>
 <body>
 <div id="wrap">
@@ -15,6 +15,7 @@
     <div class="stat">
       <small>SCORE / BEST</small>
       <strong id="score">0</strong> <span id="best">/ 0</span>
+      <div id="coinHud">🪙 0</div>
     </div>
     <div id="rightHud">
       <div id="letters">T I R A K U R I</div>
@@ -39,17 +40,28 @@
         タップでジャンプ、空中でもう1回タップで<strong>2段ジャンプ</strong>。<br>
         栗をよけてハイスコアをねらおう。
       </div>
-      <button id="startBtn">タップしてスタート</button>
-      <div id="tips">
-        栗を連続でよけるとCOMBO！ギリギリ回避は高得点。<br>
-        KURI RUSH / BONUS RUN / ジャンプ台も出現
+      <div id="menuBtns">
+        <button id="startBtn">タップしてスタート</button>
+        <button id="shopBtn">🛒 ショップ</button>
       </div>
+      <div id="tips">
+        コインを集めて新アイテムを購入・強化！<br>
+        アイテムは最大5つまで装備できるノン
+      </div>
+    </div>
+    <div id="shopPanel" hidden>
+      <div class="shopHead">
+        <div><strong>ティラクリショップ</strong><small id="shopSlots">装備 3 / 5</small></div>
+        <div><span id="shopCoins">🪙 0</span><button id="shopCloseBtn" aria-label="ショップを閉じる">×</button></div>
+      </div>
+      <div id="shopItems"></div>
+      <div id="shopNote"></div>
     </div>
   </div>
 </div>
-<script src="./theme.js?v=20260913-1855"></script>
-<script src="./visibility.js?v=20260913-1855"></script>
-<script src="./contrast.js?v=20260913-1855"></script>
-<script src="./game.js?v=20260913-1855"></script>
+<script src="./theme.js?v=20260913-2008"></script>
+<script src="./visibility.js?v=20260913-2008"></script>
+<script src="./contrast.js?v=20260913-2008"></script>
+<script src="./game.js?v=20260913-2008"></script>
 </body>
 </html>
