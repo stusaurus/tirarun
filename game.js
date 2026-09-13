@@ -484,12 +484,19 @@
     scoreFloat += (sp * dt / 18) * (player.fever > 0 ? 3 : 1);
     score = Math.floor(scoreFloat);
 
+    const feverBefore = player.fever;
     player.runT += dt * sp / 95;
     player.squash = Math.max(0, player.squash - dt);
     player.magnet = Math.max(0, player.magnet - dt);
     player.giant = Math.max(0, player.giant - dt);
     player.fever = Math.max(0, player.fever - dt);
     player.invincible = Math.max(0, player.invincible - dt);
+    if (feverBefore > 0 && player.fever <= 0) {
+      player.invincible = Math.max(player.invincible, 1.6);
+      popText('無敵タイム！', player.x + player.w*.55, player.y - 12, '#d9fbff', .85, 18);
+      burst(player.x + player.w/2, player.y + player.h/2, '#bff7ff', 14, 135);
+      beep(700, .08, 'sine', .024);
+    }
 
     if (comboTimer > 0) {
       comboTimer -= dt;
