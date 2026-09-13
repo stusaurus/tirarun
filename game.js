@@ -11,6 +11,9 @@
   const bestEl = document.getElementById('best');
   const lettersEl = document.getElementById('letters');
   const muteBtn = document.getElementById('mute');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const pausePanel = document.getElementById('pausePanel');
+  const resumeBtn = document.getElementById('resumeBtn');
   const shieldBuff = document.getElementById('shieldBuff');
   const magnetBuff = document.getElementById('magnetBuff');
   const giantBuff = document.getElementById('giantBuff');
@@ -272,7 +275,7 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     groundY = H * 0.79;
     player.x = Math.max(72, W * 0.22);
-    if (state !== 'playing') player.y = groundY - player.h;
+    if (state !== 'playing' && state !== 'paused') player.y = groundY - player.h;
   }
   addEventListener('resize', resize, {passive:true});
   resize();
@@ -327,13 +330,34 @@
       damageUntil:0
     });
     overlay.style.display = 'none';
+    pausePanel.hidden = true;
+    pauseBtn.hidden = false;
     resultEl.style.display = 'none';
     updateHud();
+  }
+
+  function pauseGame() {
+    if (state !== 'playing') return;
+    state = 'paused';
+    pausePanel.hidden = false;
+    pauseBtn.hidden = true;
+    if (audioCtx && audioCtx.state === 'running') audioCtx.suspend().catch(() => {});
+  }
+
+  function resumeGame() {
+    if (state !== 'paused') return;
+    state = 'playing';
+    last = performance.now();
+    pausePanel.hidden = true;
+    pauseBtn.hidden = false;
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
   }
 
   function finishGame() {
     if (state !== 'playing' && state !== 'damage') return;
     state = 'over';
+    pausePanel.hidden = true;
+    pauseBtn.hidden = true;
     shake = 10;
     const unlockBefore = new Set(
       Object.keys(ITEM_CATALOG).filter(id => !ITEM_CATALOG[id].basic && isItemUnlocked(id))
@@ -492,6 +516,11 @@
   }
 
   canvas.addEventListener('pointerdown', input, {passive:false});
+  pauseBtn.addEventListener('pointerdown', e => e.stopPropagation());
+  pauseBtn.addEventListener('click', e => { e.stopPropagation(); pauseGame(); });
+  resumeBtn.addEventListener('pointerdown', e => e.stopPropagation());
+  resumeBtn.addEventListener('click', e => { e.stopPropagation(); resumeGame(); });
+  pausePanel.addEventListener('pointerdown', e => e.stopPropagation());
   overlay.addEventListener('pointerdown', e => {
     if (e.target.closest && e.target.closest('#shopPanel,#shopBtn,#startBtn,#mute')) return;
     input(e);
@@ -547,6 +576,15 @@
     }
   });
   addEventListener('keydown', input, {passive:false});
+  addEventListener('keydown', e => {
+    if (!['Escape','KeyP'].includes(e.code)) return;
+    e.preventDefault();
+    if (state === 'playing') pauseGame();
+    else if (state === 'paused') resumeGame();
+  }, {passive:false});
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && state === 'playing') pauseGame();
+  });
   muteBtn.addEventListener('pointerdown', e => e.stopPropagation());
   muteBtn.addEventListener('click', e => {
     e.stopPropagation();

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
   <meta name="theme-color" content="#dff7ef" />
   <title>ティラクリ | ワンタップラン</title>
-  <link rel="stylesheet" href="./style.css?v=20260913-2140" />
+  <link rel="stylesheet" href="./style.css?v=20260913-2155" />
 </head>
 <body>
 <div id="wrap">
@@ -20,6 +20,7 @@
     </div>
     <div id="rightHud">
       <div id="letters">T I R A K U R I</div>
+      <button id="pauseBtn" aria-label="一時停止" hidden>⏸️</button>
       <button id="mute" aria-label="サウンド切替">🔊</button>
     </div>
   </div>
@@ -31,6 +32,15 @@
     <div class="buff" id="feverBuff">🔥 FEVER ×3</div>
     <div class="buff" id="timeBuff">⏳ タイムスロー</div>
     <div class="buff" id="wingBuff">🪽 プテランの羽</div>
+  </div>
+
+  <div id="pausePanel" hidden>
+    <div class="pauseCard">
+      <div class="pauseIcon">⏸️</div>
+      <strong>いったん休憩だノン</strong>
+      <small>スコアもアイテム時間も止まっているよ</small>
+      <button id="resumeBtn">▶ 続ける</button>
+    </div>
   </div>
 
   <div id="overlay">
@@ -62,9 +72,9 @@
     </div>
   </div>
 </div>
-<script src="./theme.js?v=20260913-2140"></script>
-<script src="./visibility.js?v=20260913-2140"></script>
-<script src="./contrast.js?v=20260913-2140"></script>
-<script src="./game.js?v=20260913-2140"></script>
+<script src="./theme.js?v=20260913-2155"></script>
+<script src="./visibility.js?v=20260913-2155"></script>
+<script src="./contrast.js?v=20260913-2155"></script>
+<script src="./game.js?v=20260913-2155"></script>
 </body>
 </html>
