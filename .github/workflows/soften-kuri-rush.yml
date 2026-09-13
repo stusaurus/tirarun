@@ -14,8 +14,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Make KURI RUSH fair
-        shell: python
+        shell: bash
         run: |
+          python3 - <<'PY'
           from pathlib import Path
           path = Path('game.js')
           s = path.read_text(encoding='utf-8')
@@ -101,6 +102,7 @@ jobs:
 """, 'rush lead in')
 
           path.write_text(s, encoding='utf-8')
+          PY
       - name: Validate JavaScript
         run: node --check game.js
       - name: Commit tuned KURI RUSH
