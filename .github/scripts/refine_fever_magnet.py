@@ -159,7 +159,7 @@ rep(
     }
 
 """,
-""",
+"",
 'old fever overlay')
 
 game.write_text(s, encoding='utf-8')
