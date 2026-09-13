@@ -50,7 +50,7 @@
   let eventBanner = '';
   let eventBannerTimer = 0;
   let rushWarpTimer = 0;
-  const RUSH_WARP_DURATION = .48;
+  const RUSH_WARP_DURATION = .95;
 
   const spritePaths = {
     run1: '1218B0FC-C2A9-4661-8707-C27D900A8992.png',
@@ -412,14 +412,14 @@
 
   function startEvent(type) {
     eventMode = type;
-    eventTimer = type === 'rush' ? 6.5 : 8.5;
+    eventTimer = type === 'rush' ? 7.45 : 8.5;
     eventBanner = type === 'rush' ? '🌰 KURI RUSH!' : '⭐ BONUS RUN!';
     eventBannerTimer = 1.8;
     if (type === 'rush') {
       // Clear every dangerous chestnut in front of Tiranon, then leave a long
       // run-up so the first rush obstacle always enters visibly from offscreen.
       objects = objects.filter(o => o.type !== 'kuri' || o.x < player.x - 24);
-      nextPattern = distance + W + 300;
+      nextPattern = distance + W + 390;
       flash = 0;
       rushWarpTimer = RUSH_WARP_DURATION;
       popText('栗ラッシュ！ 準備！', W*.5, H*.32, '#dff8ff', .9, 22);
