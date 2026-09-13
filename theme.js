@@ -239,20 +239,20 @@
 
     const b = alphaBounds(assets.ground);
     const visibleRatio = b.w / b.h;
-    const dh = Math.max(86, Math.min(104, h * .70));
+    const dh = Math.max(78, Math.min(94, h * .62));
     const dw = dh * visibleRatio;
     const scroll = (performance.now() * .22) % dw;
     for (let dx=x-scroll; dx<x+w; dx+=dw) {
-      nativeDrawImage.call(ctx, assets.ground, b.x,b.y,b.w,b.h, dx,y-5,dw,dh);
+      nativeDrawImage.call(ctx, assets.ground, b.x,b.y,b.w,b.h, dx,y-4,dw,dh);
     }
 
     if (assets.grass) {
-      drawSheetCell(ctx, assets.grass, 0, w*.14, y+2, 30, .72);
-      drawSheetCell(ctx, assets.grass, 3, w*.62, y+3, 26, .68);
+      drawSheetCell(ctx, assets.grass, 0, w*.14, y+2, 28, .70);
+      drawSheetCell(ctx, assets.grass, 3, w*.62, y+3, 24, .66);
     }
     if (assets.rocks) {
-      drawSheetCell(ctx, assets.rocks, 1, w*.38, y+25, 24, .46);
-      drawSheetCell(ctx, assets.rocks, 4, w*.83, y+30, 20, .42);
+      drawSheetCell(ctx, assets.rocks, 1, w*.38, y+22, 22, .44);
+      drawSheetCell(ctx, assets.rocks, 4, w*.83, y+26, 18, .40);
     }
     return true;
   }
