@@ -4,6 +4,8 @@
   // Keep Tiranon readable against green scenery without changing the artwork itself.
   const proto = CanvasRenderingContext2D.prototype;
   const nativeDrawImage = proto.drawImage;
+  const nativeFillRect = proto.fillRect;
+  const nativeFill = proto.fill;
 
   const playerSprites = [
     '1218B0FC-C2A9-4661-8707-C27D900A8992.png',
@@ -44,5 +46,27 @@
 
     // Crisp original sprite on top.
     return Reflect.apply(nativeDrawImage, this, [image, ...args]);
+  };
+
+  // Lower only the background image tone a little. Ground, platforms, items and Tiranon
+  // are drawn afterwards, so they stay brighter and easier to read.
+  proto.fillRect = function(x, y, w, h) {
+    const isFullCanvas =
+      x === 0 && y === 0 &&
+      w >= this.canvas.clientWidth * 0.9 &&
+      h >= this.canvas.clientHeight * 0.9;
+
+    const result = Reflect.apply(nativeFillRect, this, arguments);
+
+    if (isFullCanvas) {
+      const veil = new Path2D();
+      veil.rect(x, y, w, h);
+      this.save();
+      this.fillStyle = 'rgba(48, 54, 51, 0.06)';
+      Reflect.apply(nativeFill, this, [veil]);
+      this.restore();
+    }
+
+    return result;
   };
 })();
