@@ -1,10 +1,8 @@
 (() => {
   'use strict';
 
-  // This file loads AFTER theme.js and visibility.js.
-  // Instead of trying to filter scenery before theme.js captures canvas methods,
-  // we tone down the completed full-screen background after theme.js draws it.
-  // This makes the visual change reliable on iPhone/Safari.
+  // Final readability pass. Loaded after theme.js and visibility.js.
+  // Tone down only the completed full-screen background, then lift Tiranon a little.
   const proto = CanvasRenderingContext2D.prototype;
   const previousFillRect = proto.fillRect;
   const previousDrawImage = proto.drawImage;
@@ -39,11 +37,11 @@
     const result = Reflect.apply(previousFillRect, this, arguments);
 
     if (fullCanvas) {
-      // A direct translucent layer over the finished background. Ground,
-      // platforms, items and the player are drawn afterward and stay brighter.
+      // One last small step darker than the previous pass.
+      // Ground, platforms, items and player are drawn later and keep their pop.
       this.save();
       this.globalCompositeOperation = 'source-over';
-      this.globalAlpha = 0.15;
+      this.globalAlpha = 0.20;
       this.filter = 'none';
       Reflect.apply(previousDrawImage, this, [tonePixel, 0, 0, 1, 1, x, y, w, h]);
       this.restore();
@@ -57,10 +55,10 @@
       return Reflect.apply(previousDrawImage, this, [image, ...args]);
     }
 
-    // Lift Tiranon relative to the newly toned-down background.
+    // Small final lift so Tiranon separates from the toned background naturally.
     this.save();
     const inherited = this.filter && this.filter !== 'none' ? `${this.filter} ` : '';
-    this.filter = `${inherited}brightness(1.12) saturate(1.08) contrast(1.035)`;
+    this.filter = `${inherited}brightness(1.14) saturate(1.10) contrast(1.04)`;
     const result = Reflect.apply(previousDrawImage, this, [image, ...args]);
     this.restore();
     return result;
