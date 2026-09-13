@@ -24,14 +24,10 @@ new = """    const coinLine = `<br><span style=\"font-size:15px;color:#9a7119\">
 if old not in s:
     raise SystemExit('missing result coin target')
 s = s.replace(old, new, 1)
-old = """  requestAnimationFrame(loop);
-})();
-"""
-new = """  renderShop();
-  requestAnimationFrame(loop);
-})();
-"""
-if old not in s:
-    raise SystemExit('missing initial render target')
-s = s.replace(old, new, 1)
+needle = "  requestAnimationFrame(loop);"
+idx = s.rfind(needle)
+if idx < 0:
+    raise SystemExit('missing initial requestAnimationFrame target')
+if "  renderShop();\n  requestAnimationFrame(loop);" not in s[idx-30:idx+len(needle)+30]:
+    s = s[:idx] + "  renderShop();\n" + s[idx:]
 p.write_text(s, encoding='utf-8')
