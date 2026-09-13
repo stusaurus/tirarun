@@ -30,6 +30,13 @@
   ]);
   const stageDirt = new Set(['#b98055', '#ae7d5d', '#a8775c', '#71584f']);
   const baseDirt = ['#9d704f', '#946d54', '#916750', '#5f4b45'];
+  const backgroundFilters = [
+    'saturate(0.78) brightness(1.03)',
+    'saturate(0.72) brightness(1.01)',
+    'saturate(0.94) brightness(1.00)',
+    'saturate(0.98) brightness(1.00)'
+  ];
+  const backgroundVeil = [0.09, 0.08, 0.025, 0.01];
 
   const assets = {
     ground: null,
@@ -195,11 +202,23 @@
     if (!img) return false;
     const mix = stageChangedAt ? Math.min(1, (performance.now()-stageChangedAt)/550) : 1;
     const prev = assets.backgrounds[previousStage];
+
+    ctx.save();
+    ctx.filter = backgroundFilters[currentStage] || 'none';
     if (prev && previousStage !== currentStage && mix < 1) {
       drawCover(ctx, prev, x,y,w,h,1);
       drawCover(ctx, img, x,y,w,h,mix);
     } else {
       drawCover(ctx, img, x,y,w,h,1);
+    }
+    ctx.restore();
+
+    const veil = backgroundVeil[currentStage] || 0;
+    if (veil > 0) {
+      ctx.save();
+      ctx.fillStyle = `rgba(247, 244, 232, ${veil})`;
+      nativeFillRect.call(ctx, x, y, w, h);
+      ctx.restore();
     }
     return true;
   }
@@ -242,17 +261,23 @@
     const dh = Math.max(78, Math.min(94, h * .62));
     const dw = dh * visibleRatio;
     const scroll = (performance.now() * .22) % dw;
+
+    ctx.save();
+    ctx.filter = currentStage <= 1
+      ? 'saturate(0.68) brightness(0.97)'
+      : 'saturate(0.92) brightness(0.99)';
     for (let dx=x-scroll; dx<x+w; dx+=dw) {
       nativeDrawImage.call(ctx, assets.ground, b.x,b.y,b.w,b.h, dx,y-4,dw,dh);
     }
+    ctx.restore();
 
     if (assets.grass) {
-      drawSheetCell(ctx, assets.grass, 0, w*.14, y+2, 28, .70);
-      drawSheetCell(ctx, assets.grass, 3, w*.62, y+3, 24, .66);
+      drawSheetCell(ctx, assets.grass, 0, w*.14, y+2, 28, .54);
+      drawSheetCell(ctx, assets.grass, 3, w*.62, y+3, 24, .50);
     }
     if (assets.rocks) {
-      drawSheetCell(ctx, assets.rocks, 1, w*.38, y+22, 22, .44);
-      drawSheetCell(ctx, assets.rocks, 4, w*.83, y+26, 18, .40);
+      drawSheetCell(ctx, assets.rocks, 1, w*.38, y+22, 22, .34);
+      drawSheetCell(ctx, assets.rocks, 4, w*.83, y+26, 18, .30);
     }
     return true;
   }
@@ -263,7 +288,13 @@
     const visualH = Math.max(46, Math.min(64, rr.w * .40));
     const dx = rr.x + (rr.w-visualW)/2;
     const dy = rr.y - 6;
+
+    ctx.save();
+    ctx.filter = currentStage <= 1
+      ? 'saturate(0.70) brightness(0.97)'
+      : 'saturate(0.94) brightness(1.00)';
     drawCropped(ctx, assets.platform, dx,dy,visualW,visualH);
+    ctx.restore();
     return true;
   }
 
