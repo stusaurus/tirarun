@@ -1,4 +1,4 @@
-name: Add progression shop
+name: Fix progression HUD
 
 on:
   push:
@@ -13,14 +13,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply progression shop patch
-        run: python3 .github/scripts/run_progression_shop.py
+      - name: Fix progression HUD
+        run: python3 .github/scripts/fix_progression_hud.py
       - name: Validate JavaScript
         run: node --check game.js
-      - name: Commit progression shop
+      - name: Commit progression HUD fix
         run: |
           git config user.name "stusaurus"
           git config user.email "kiyo0625puma@yahoo.co.jp"
-          git add game.js index.html style.css
-          git commit -m "feat: add coins shop upgrades and loadouts"
+          git add game.js
+          git commit -m "fix: settle run coins and initialize shop HUD"
           git push
