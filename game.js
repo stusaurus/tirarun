@@ -50,7 +50,10 @@
   let eventBanner = '';
   let eventBannerTimer = 0;
   let rushWarpTimer = 0;
+  let roarFx = 0;
+  let roarIntroduced = false;
   const RUSH_WARP_DURATION = .95;
+  const ROAR_FX_DURATION = .65;
 
   const spritePaths = {
     run1: '1218B0FC-C2A9-4661-8707-C27D900A8992.png',
@@ -139,6 +142,8 @@
     eventBanner = '';
     eventBannerTimer = 0;
     rushWarpTimer = 0;
+    roarFx = 0;
+    roarIntroduced = false;
     Object.assign(player, {
       y: groundY - 48, w:48, h:48, vy:0, jumps:0,
       shield:false, invincible:0, magnet:0, giant:0, fever:0, runT:0, squash:0,
@@ -355,6 +360,13 @@
       addLetter(x + 55 + Math.random() * 130, groundY - (145 + Math.random() * 85));
     }
 
+    if (!roarIntroduced && distance > 2400) {
+      addItem(x + 68, groundY - 118, 'roar');
+      roarIntroduced = true;
+    } else if (Math.random() < .035) {
+      addItem(x + 70 + Math.random() * 90, groundY - (105 + Math.random() * 65), 'roar');
+    }
+
     if (Math.random() < .095) {
       const q = Math.random();
       addItem(
@@ -503,6 +515,7 @@
       if (comboTimer <= 0) resetCombo();
     }
     rushWarpTimer = Math.max(0, rushWarpTimer - dt);
+    roarFx = Math.max(0, roarFx - dt);
     updateEvents(dt);
 
     const targetSize = player.giant > 0 ? 76 : 48;
@@ -719,6 +732,26 @@
       pickupPop(o, '#ffd27a');
       beep(250, .14, 'square', .04);
       burst(o.x + o.w/2, o.y + o.h/2, '#ffd27a', 18, 165);
+    }
+    if (o.item === 'roar') {
+      roarFx = ROAR_FX_DURATION;
+      let blasted = 0;
+      for (const target of objects) {
+        if (target.type !== 'kuri') continue;
+        if (target.x < player.x - 45 || target.x > W + 160) continue;
+        target.type = 'cleared';
+        blasted++;
+        burst(target.x + target.w/2, target.y + target.h/2, '#ffb45f', 11, 185);
+      }
+      const gain = blasted * 35;
+      scoreFloat += gain;
+      score = Math.floor(scoreFloat);
+      shake = Math.max(shake, 5);
+      flash = Math.max(flash, .07);
+      burst(player.x + player.w*.72, player.y + player.h*.38, '#ffe29a', 18, 185);
+      popText(blasted ? `ガオーー！ 栗${blasted}個！ +${gain}` : 'ガオーー！', W*.5, H*.34, '#ffe09a', 1.0, 23);
+      beep(150, .16, 'sawtooth', .045);
+      setTimeout(() => beep(260, .12, 'square', .03), 80);
     }
   }
 
@@ -1045,6 +1078,27 @@
     }
   }
 
+  function drawRoarEffect() {
+    if (roarFx <= 0) return;
+    const p = 1 - roarFx / ROAR_FX_DURATION;
+    const cx = player.x + player.w*.58;
+    const cy = player.y + player.h*.42;
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    for (let i=0; i<3; i++) {
+      const q = Math.min(1, p + i*.12);
+      const r = 28 + q * Math.max(W, H) * .48;
+      ctx.strokeStyle = `rgba(255,220,135,${(1-q)*.52})`;
+      ctx.lineWidth = 8 - q*5;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, -.55, .55);
+      ctx.stroke();
+    }
+    ctx.fillStyle = `rgba(255,183,82,${(1-p)*.08})`;
+    ctx.fillRect(0,0,W,H);
+    ctx.restore();
+  }
+
   function drawRushWarpEffect() {
     if (rushWarpTimer <= 0) return;
     const p = 1 - rushWarpTimer / RUSH_WARP_DURATION;
@@ -1204,8 +1258,8 @@
         if (!drawSprite(o.item, o.x-pad, o.y-pad, o.w+pad*2, o.h+pad*2)) {
           drawBubble(
             o,
-            o.item==='shield'?'S':o.item==='magnet'?'M':'G',
-            o.item==='shield'?'#bfeeff':o.item==='magnet'?'#ffd0d0':'#c9f2a9'
+            o.item==='shield'?'S':o.item==='magnet'?'M':o.item==='giant'?'G':'ガオ',
+            o.item==='shield'?'#bfeeff':o.item==='magnet'?'#ffd0d0':o.item==='giant'?'#c9f2a9':'#ffd8a8'
           );
         }
       }
@@ -1213,6 +1267,7 @@
 
     drawPickupEffects();
     drawPlayer();
+    drawRoarEffect();
     drawRushWarpEffect();
 
     for (const p of particles) {
