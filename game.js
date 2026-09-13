@@ -240,7 +240,9 @@
       localStorage.setItem(LS_BEST, String(best));
     }
     totalRuns += 1;
-    wallet += runCoins;
+    const earnedCoins = runCoins;
+    wallet += earnedCoins;
+    runCoins = 0;
     saveProgress();
     const roarNowUnlocked = isItemUnlocked('roar');
     const unlockedRoar = !roarWasUnlocked && roarNowUnlocked && !owned.roar;
@@ -249,7 +251,7 @@
     const comboLine = comboPeak >= 3
       ? `<br><span style="font-size:13px;color:#8a6b3d">MAX COMBO ${comboPeak}</span>`
       : '';
-    const coinLine = `<br><span style="font-size:15px;color:#9a7119">🪙 +${runCoins}　所持 ${wallet}</span>`;
+    const coinLine = `<br><span style="font-size:15px;color:#9a7119">🪙 +${earnedCoins}　所持 ${wallet}</span>`;
     const unlockLine = unlockedRoar
       ? `<br><span style="font-size:14px;color:#d66f2c">NEW! 「ガオー！」がショップに入荷！</span>`
       : '';
@@ -1564,5 +1566,6 @@
     draw();
     requestAnimationFrame(loop);
   }
+  renderShop();
   requestAnimationFrame(loop);
 })();
