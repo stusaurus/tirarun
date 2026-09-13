@@ -72,7 +72,7 @@
 
   const player = {
     x: 88, y: 0, w: 48, h: 48, vy: 0, jumps: 0,
-    shield: false, magnet: 0, giant: 0, fever: 0,
+    shield: false, invincible: 0, magnet: 0, giant: 0, fever: 0,
     runT: 0, squash: 0, damageUntil: 0
   };
 
@@ -141,7 +141,7 @@
     rushWarpTimer = 0;
     Object.assign(player, {
       y: groundY - 48, w:48, h:48, vy:0, jumps:0,
-      shield:false, magnet:0, giant:0, fever:0, runT:0, squash:0,
+      shield:false, invincible:0, magnet:0, giant:0, fever:0, runT:0, squash:0,
       damageUntil:0
     });
     overlay.style.display = 'none';
@@ -489,6 +489,7 @@
     player.magnet = Math.max(0, player.magnet - dt);
     player.giant = Math.max(0, player.giant - dt);
     player.fever = Math.max(0, player.fever - dt);
+    player.invincible = Math.max(0, player.invincible - dt);
 
     if (comboTimer > 0) {
       comboTimer -= dt;
@@ -585,6 +586,12 @@
       if (o.type === 'platform' || o.type === 'spring') continue;
 
       if (o.type === 'kuri' && rectHit(pbox, o, 4)) {
+        if (player.invincible > 0) {
+          burst(o.x + o.w/2, o.y + o.h/2, '#bff7ff', 8, 125);
+          objects.splice(i, 1);
+          beep(560, .035, 'sine', .016);
+          continue;
+        }
         if (player.giant > 0 || player.fever > 0) {
           burst(o.x + o.w/2, o.y + o.h/2, '#a8673e', 12, 180);
           objects.splice(i, 1);
@@ -595,12 +602,15 @@
         }
         if (player.shield) {
           player.shield = false;
+          player.invincible = 1.25;
           resetCombo();
-          flash = .16;
+          flash = .12;
           shake = 6;
-          burst(o.x + o.w/2, o.y + o.h/2, '#8de8ff', 14, 150);
+          burst(o.x + o.w/2, o.y + o.h/2, '#8de8ff', 18, 165);
+          popText('無敵！', player.x + player.w*.55, player.y - 12, '#d9fbff', .7, 18);
           objects.splice(i, 1);
-          beep(240, .12, 'sawtooth', .05);
+          beep(240, .10, 'sawtooth', .045);
+          setTimeout(() => beep(680, .07, 'sine', .025), 70);
           continue;
         }
         beginDamageGameOver();
@@ -940,6 +950,12 @@
     if(p.squash>0){sx=1.08;sy=.92;}
     ctx.scale(sx,sy);
 
+    if(p.invincible>0){
+      const blink = .58 + .42 * Math.abs(Math.sin(performance.now() * .022));
+      ctx.globalAlpha = blink;
+      ctx.shadowColor = '#bff7ff';
+      ctx.shadowBlur = 12;
+    }
     if(p.fever>0){ctx.shadowColor='#ffd33d';ctx.shadowBlur=18;}
     if(p.shield){
       ctx.strokeStyle='#8de8ff';ctx.lineWidth=5;ctx.globalAlpha=.7;
