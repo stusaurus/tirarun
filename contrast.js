@@ -41,12 +41,12 @@
 
   proto.drawImage = function(image, ...args) {
     if (hasSprite(image, playerSprites)) {
-      // Pull Tiranon forward without creating a white sticker-like outline.
+      // Make the character clearly brighter and more vivid than the scenery.
       return drawWithFilter(
         this,
         image,
         args,
-        'brightness(1.16) saturate(1.10) contrast(1.04)'
+        'brightness(1.22) saturate(1.16) contrast(1.06)'
       );
     }
 
@@ -55,11 +55,12 @@
         ? image.naturalWidth / image.naturalHeight
         : 1;
 
-      // Vertical assets are stage backgrounds, so push them back more.
-      // Ground/platform/decor stay a little stronger so gameplay remains readable.
+      // Vertical assets are the stage backgrounds: deliberately tone them down
+      // enough that the change is obvious on a phone screen.
+      // Ground/platform/decor are reduced more gently so hazards remain readable.
       const filter = ratio <= 0.85
-        ? 'brightness(0.84) saturate(0.76) contrast(0.97)'
-        : 'brightness(0.90) saturate(0.82) contrast(0.99)';
+        ? 'brightness(0.68) saturate(0.55) contrast(0.92)'
+        : 'brightness(0.86) saturate(0.72) contrast(0.97)';
 
       return drawWithFilter(this, image, args, filter);
     }
