@@ -1,0 +1,53 @@
+name: Extend KURI RUSH warp
+
+on:
+  push:
+    paths:
+      - '.github/workflows/extend-rush-warp.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extend warp transition
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          game = Path('game.js')
+          s = game.read_text(encoding='utf-8')
+
+          replacements = [
+              ("const RUSH_WARP_DURATION = .48;", "const RUSH_WARP_DURATION = .95;", "warp duration"),
+              ("eventTimer = type === 'rush' ? 6.5 : 8.5;", "eventTimer = type === 'rush' ? 7.45 : 8.5;", "rush timer"),
+              ("nextPattern = distance + W + 300;", "nextPattern = distance + W + 390;", "rush runway"),
+              ("20260913-1545", "20260913-1638", "cache version"),
+          ]
+
+          for old, new, label in replacements:
+              target = game if label != 'cache version' else Path('index.html')
+              text = s if target == game else target.read_text(encoding='utf-8')
+              if old not in text:
+                  raise SystemExit(f'missing target: {label}')
+              text = text.replace(old, new, 1 if label != 'cache version' else text.count(old))
+              if target == game:
+                  s = text
+              else:
+                  target.write_text(text, encoding='utf-8')
+
+          game.write_text(s, encoding='utf-8')
+          PY
+      - name: Validate JavaScript
+        run: node --check game.js
+      - name: Commit longer warp
+        run: |
+          git config user.name "stusaurus"
+          git config user.email "kiyo0625puma@yahoo.co.jp"
+          git add game.js index.html
+          git commit -m "effect: lengthen KURI RUSH warp transition"
+          git push
