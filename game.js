@@ -62,17 +62,17 @@
     giant: {name:'巨大化', icon:'🍖', desc:'大きくなって栗を壊す', basic:true, maxLevel:1},
     roar: {
       name:'ガオー！', icon:'🗣️', desc:'咆哮で前方の栗をまとめて吹き飛ばす',
-      price:300, unlockBest:2000, unlockRuns:3, maxLevel:5,
+      price:300, unlockBest:3500, unlockRuns:3, maxLevel:5,
       upgradeCosts:[180,400,800,1400]
     },
     slow: {
       name:'タイムどんぐり', icon:'⏳', desc:'数秒間、栗とステージの流れをスローにする',
-      price:500, unlockBest:5000, unlockRuns:8, maxLevel:5,
+      price:500, unlockBest:7500, unlockRuns:8, maxLevel:5,
       upgradeCosts:[300,650,1200,2000]
     },
     wing: {
       name:'プテランの羽', icon:'🪽', desc:'一定時間ふわっと浮いて、落下をゆっくりにする',
-      price:750, unlockBest:8000, unlockRuns:15, maxLevel:5,
+      price:750, unlockBest:13000, unlockRuns:15, maxLevel:5,
       upgradeCosts:[420,850,1500,2400]
     }
   };
@@ -962,10 +962,14 @@
         const dx = px - cx;
         const dy = py - cy;
         const dd = Math.hypot(dx, dy);
-        const radius = coinPull ? (player.magnet > 0 ? 250 : 205) : 120;
-        const pull = coinPull ? 6.0 : 5.0;
+        const magnetActive = player.magnet > 0;
+        const radius = coinPull ? (magnetActive ? 340 : 205) : 120;
+        const pull = coinPull ? (magnetActive ? 11.5 : 6.0) : 5.0;
         if (dd < radius) {
-          o.x += dx * dt * pull;
+          // Coins that have already passed Tiranon get an extra horizontal
+          // catch-up boost so they do not trail behind until they disappear.
+          const behindBoost = magnetActive && cx < px ? 1.7 : 1;
+          o.x += dx * dt * pull * behindBoost;
           o.y += dy * dt * pull;
         }
       }
