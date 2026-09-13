@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  // Final readability pass: push scenery back a little and lift only Tiranon.
+  // Readability pass: push scenery back a little more and lift only Tiranon.
   // Loaded after theme.js + visibility.js so gameplay logic and artwork stay untouched.
   const proto = CanvasRenderingContext2D.prototype;
   const previousFillRect = proto.fillRect;
@@ -28,11 +28,11 @@
     const result = Reflect.apply(previousFillRect, this, arguments);
 
     if (fullCanvas) {
-      // Small neutral-dark veil: enough to separate the mint character,
-      // but mild enough to keep the soft picture-book atmosphere.
+      // A slightly stronger neutral veil lowers the background tone without
+      // muddying the picture-book colors or changing gameplay elements.
       this.save();
       this.globalCompositeOperation = 'source-over';
-      this.fillStyle = 'rgba(36, 46, 43, 0.075)';
+      this.fillStyle = 'rgba(34, 43, 41, 0.11)';
       Reflect.apply(previousFillRect, this, [x, y, w, h]);
       this.restore();
     }
@@ -45,11 +45,11 @@
       return Reflect.apply(previousDrawImage, this, [image, ...args]);
     }
 
-    // Lift Tiranon slightly relative to the toned-down scenery.
-    // Keep the boost small so mint, yellow and facial features remain natural.
+    // Lift Tiranon one more step relative to the scenery while keeping the
+    // mint body, yellow spines and facial features natural rather than glowing.
     this.save();
     const previousFilter = this.filter;
-    this.filter = 'brightness(1.09) saturate(1.07) contrast(1.025)';
+    this.filter = 'brightness(1.13) saturate(1.09) contrast(1.035)';
     const result = Reflect.apply(previousDrawImage, this, [image, ...args]);
     this.filter = previousFilter;
     this.restore();
