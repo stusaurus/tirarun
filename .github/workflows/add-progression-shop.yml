@@ -24,3 +24,4 @@ jobs:
           git add game.js
           git commit -m "fix: settle run coins and initialize shop HUD"
           git push
+# rerun-v2
