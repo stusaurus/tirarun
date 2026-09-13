@@ -1,0 +1,26 @@
+name: Add flow-state progression
+
+on:
+  push:
+    paths:
+      - '.github/workflows/add-flow-state.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply flow-state progression
+        run: python3 .github/scripts/add_flow_state.py
+      - name: Validate JavaScript
+        run: node --check game.js
+      - name: Commit flow-state update
+        run: |
+          git config user.name "stusaurus"
+          git config user.email "kiyo0625puma@yahoo.co.jp"
+          git add game.js index.html style.css
+          git commit -m "gameplay: add adaptive goals and flow pacing"
+          git push
