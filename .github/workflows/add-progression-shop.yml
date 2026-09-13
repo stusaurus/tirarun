@@ -14,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Apply progression shop patch
-        run: python3 .github/scripts/add_progression_shop.py
+        run: python3 .github/scripts/run_progression_shop.py
       - name: Validate JavaScript
         run: node --check game.js
       - name: Commit progression shop
