@@ -18,6 +18,7 @@
   const timeBuff = document.getElementById('timeBuff');
   const wingBuff = document.getElementById('wingBuff');
   const coinHudEl = document.getElementById('coinHud');
+  const goalHudEl = document.getElementById('goalHud');
   const cardEl = document.getElementById('card');
   const shopBtn = document.getElementById('shopBtn');
   const shopPanel = document.getElementById('shopPanel');
@@ -107,6 +108,83 @@
     return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
   }
 
+  function roundFlowGoal(value) {
+    return Math.max(500, Math.ceil(value / 500) * 500);
+  }
+
+  function buildFlowGoals(startBest) {
+    if (startBest < 2500) return [1500, 3000, 5000];
+    const candidates = [
+      roundFlowGoal(startBest * .55),
+      roundFlowGoal(startBest * .75),
+      roundFlowGoal(startBest * .90),
+      roundFlowGoal(startBest + 1)
+    ];
+    const unique = [];
+    for (const value of candidates) {
+      if (value < 1500) continue;
+      if (!unique.length || value > unique[unique.length - 1]) unique.push(value);
+    }
+    return unique.length ? unique : [roundFlowGoal(Math.max(1500, startBest + 1))];
+  }
+
+  function resetFlowGoals() {
+    runBestAtStart = best;
+    flowGoals = buildFlowGoals(runBestAtStart);
+    flowGoalIndex = 0;
+    flowGoalStart = 0;
+    nextScoreGoal = flowGoals[0] || 1500;
+    flowRestPatterns = 0;
+    bestApproachShown = false;
+    recordChase = false;
+    newRecordAnnounced = false;
+    newRecordTimer = 0;
+  }
+
+  function advanceFlowGoal() {
+    const cleared = nextScoreGoal;
+    flowGoalStart = cleared;
+    flowGoalIndex++;
+    if (flowGoalIndex < flowGoals.length) {
+      nextScoreGoal = flowGoals[flowGoalIndex];
+    } else {
+      nextScoreGoal = roundFlowGoal(cleared + Math.max(1800, cleared * .14));
+      flowGoals.push(nextScoreGoal);
+    }
+    flowRestPatterns = Math.max(flowRestPatterns, 1);
+    popText(`GOAL CLEAR! ${cleared.toLocaleString()}`, W*.5, H*.31, '#fff0a6', .95, 21);
+    burst(player.x + player.w/2, player.y + player.h/2, '#ffd25d', 18, 160);
+    beep(820, .08, 'sine', .03);
+    setTimeout(() => beep(1040, .08, 'sine', .024), 70);
+  }
+
+  function updateFlowGoals() {
+    while (nextScoreGoal > 0 && score >= nextScoreGoal) advanceFlowGoal();
+
+    if (runBestAtStart > 0 && score < runBestAtStart) {
+      const ratio = score / runBestAtStart;
+      if (ratio >= .90 && !bestApproachShown) {
+        bestApproachShown = true;
+        popText(`BESTまであと ${Math.max(0, runBestAtStart - score).toLocaleString()}！`, W*.5, H*.27, '#ffe58a', .95, 19);
+        beep(760, .07, 'sine', .025);
+      }
+      recordChase = ratio >= .97;
+    } else if (runBestAtStart > 0 && score > runBestAtStart) {
+      recordChase = true;
+      if (!newRecordAnnounced) {
+        newRecordAnnounced = true;
+        newRecordTimer = 1.8;
+        flowRestPatterns = Math.max(flowRestPatterns, 1);
+        popText('NEW RECORD!', W*.5, H*.27, '#fff1a0', 1.25, 25);
+        burst(player.x + player.w/2, player.y + player.h/2, '#ffd45c', 26, 210);
+        beep(960, .10, 'square', .032);
+        setTimeout(() => beep(1220, .13, 'sine', .028), 90);
+      }
+    } else {
+      recordChase = false;
+    }
+  }
+
   bestEl.textContent = '/ ' + best;
 
   let W = 390;
@@ -139,6 +217,16 @@
   let eventBannerTimer = 0;
   let rushWarpTimer = 0;
   let roarFx = 0;
+  let runBestAtStart = best;
+  let flowGoals = [];
+  let flowGoalIndex = 0;
+  let nextScoreGoal = 0;
+  let flowGoalStart = 0;
+  let flowRestPatterns = 0;
+  let bestApproachShown = false;
+  let recordChase = false;
+  let newRecordAnnounced = false;
+  let newRecordTimer = 0;
   const RUSH_WARP_DURATION = .95;
   const ROAR_FX_DURATION = .65;
 
@@ -232,6 +320,7 @@
     rushWarpTimer = 0;
     roarFx = 0;
     runCoins = 0;
+    resetFlowGoals();
     Object.assign(player, {
       y: groundY - 48, w:48, h:48, vy:0, jumps:0,
       shield:false, invincible:0, magnet:0, giant:0, fever:0, timeSlow:0, wing:0, runT:0, squash:0,
@@ -268,11 +357,13 @@
       ? `<br><span style="font-size:13px;color:#8a6b3d">MAX COMBO ${comboPeak}</span>`
       : '';
     const coinLine = `<br><span style="font-size:15px;color:#9a7119">🪙 +${earnedCoins}　所持 ${wallet}</span>`;
+    const nextRemain = Math.max(0, nextScoreGoal - score);
+    const nextLine = `<br><span style="font-size:13px;color:#7b6845">NEXT ${nextScoreGoal.toLocaleString()}まで あと${nextRemain.toLocaleString()}</span>`;
     const unlockNames = newlyUnlocked.map(x => `「${x.item.name}」`).join('・');
     const unlockLine = newlyUnlocked.length
       ? `<br><span style="font-size:14px;color:#d66f2c">NEW! ${unlockNames}がショップに入荷！</span>`
       : '';
-    resultEl.innerHTML = `SCORE ${score}<br><span style="font-size:15px;color:#6a7c75">BEST ${best}</span>${comboLine}${coinLine}${unlockLine}`;
+    resultEl.innerHTML = `SCORE ${score}<br><span style="font-size:15px;color:#6a7c75">BEST ${best}</span>${comboLine}${coinLine}${nextLine}${unlockLine}`;
     subtitleEl.textContent = newlyUnlocked.length ? '新しいアイテムを解放したノン！' : newBest ? 'ベストスコアだノン！' : 'もう1回いくノン？';
     startBtn.textContent = 'もう一度あそぶ';
     renderShop();
@@ -500,6 +591,22 @@
     });
   }
 
+  function spawnRestPattern() {
+    const x = W + 90;
+    const high = Math.random() < .45;
+    if (high) {
+      addPlatform(x + 30, groundY - 72, 170);
+      for (let i=0; i<5; i++) addCoin(x + 48 + i*34, groundY - 112 - Math.sin(i/4*Math.PI)*24, 1);
+      if (Math.random() < .36) addEquippedItem(x + 185, groundY - 128, ['shield','magnet','giant','slow','wing','roar']);
+      addChestnut(x + 315, groundY - 32, .80);
+    } else {
+      for (let i=0; i<6; i++) addCoin(x + 20 + i*36, groundY - 88 - Math.sin(i/5*Math.PI)*26, 1);
+      if (Math.random() < .32) addChestnut(x + 300, groundY - 31, .78);
+    }
+    flowRestPatterns = Math.max(0, flowRestPatterns - 1);
+    nextPattern += 470 + Math.random() * 80;
+  }
+
   function spawnNormalPattern() {
     const x = W + 90;
     const level = Math.min(3, Math.floor(distance / 4200));
@@ -637,6 +744,7 @@
   function spawnPattern() {
     if (eventMode === 'rush') spawnRushPattern();
     else if (eventMode === 'bonus') spawnBonusPattern();
+    else if (flowRestPatterns > 0) spawnRestPattern();
     else spawnNormalPattern();
   }
 
@@ -672,6 +780,7 @@
         eventMode = 'normal';
         eventCooldown = 22 + Math.random() * 12;
         eventBanner = '';
+        flowRestPatterns = Math.max(flowRestPatterns, ended === 'rush' ? 2 : 1);
         if (ended === 'rush') {
           scoreFloat += 300;
           score = Math.floor(scoreFloat);
@@ -716,6 +825,7 @@
     distance += worldSp * dt;
     scoreFloat += (worldSp * dt / 18) * (player.fever > 0 ? 3 : 1);
     score = Math.floor(scoreFloat);
+    updateFlowGoals();
 
     const feverBefore = player.fever;
     player.runT += dt * sp / 95;
@@ -739,6 +849,7 @@
     }
     rushWarpTimer = Math.max(0, rushWarpTimer - dt);
     roarFx = Math.max(0, roarFx - dt);
+    newRecordTimer = Math.max(0, newRecordTimer - dt);
     updateEvents(dt);
 
     const targetSize = player.giant > 0 ? 76 : 48;
@@ -1038,6 +1149,17 @@
     scoreEl.textContent = score;
     bestEl.textContent = '/ ' + Math.max(best, score);
     coinHudEl.textContent = `🪙 ${wallet + runCoins}`;
+    if (goalHudEl) {
+      const remain = Math.max(0, nextScoreGoal - score);
+      if (recordChase && runBestAtStart > 0 && score <= runBestAtStart) {
+        goalHudEl.textContent = `🔥 BESTまであと ${Math.max(0, runBestAtStart-score).toLocaleString()}`;
+      } else if (newRecordTimer > 0) {
+        goalHudEl.textContent = '🏆 NEW RECORD!';
+      } else {
+        goalHudEl.textContent = `NEXT ${nextScoreGoal.toLocaleString()}　あと ${remain.toLocaleString()}`;
+      }
+      goalHudEl.classList.toggle('hot', recordChase || newRecordTimer > 0);
+    }
     let html = '';
     for (let i=0; i<WORD.length; i++) {
       html += `<span style="color:${i<collected?'#f39b22':'#61766f'};opacity:${i<collected?1:.55}">${WORD[i]}</span>${i<WORD.length-1?' ':''}`;
@@ -1572,6 +1694,21 @@
     ctx.restore();
   }
 
+  function drawRecordChaseEffect() {
+    if (!recordChase && newRecordTimer <= 0) return;
+    const pulse = .5 + .5 * Math.sin(performance.now() * .012);
+    ctx.save();
+    ctx.strokeStyle = `rgba(255,205,72,${.28 + pulse*.28})`;
+    ctx.lineWidth = 3;
+    roundedRect(5, 5, W-10, H-10, 20);
+    ctx.stroke();
+    ctx.strokeStyle = `rgba(255,244,171,${.12 + pulse*.14})`;
+    ctx.lineWidth = 7;
+    roundedRect(10, 10, W-20, H-20, 18);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function drawRunUI() {
     if (combo >= 2) {
       const mult = comboMultiplier();
@@ -1664,6 +1801,7 @@
     }
     ctx.globalAlpha=1;
 
+    drawRecordChaseEffect();
     drawRunUI();
 
     if(flash>0){
