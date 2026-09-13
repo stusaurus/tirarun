@@ -1,0 +1,26 @@
+name: Add time acorn and wing
+
+on:
+  push:
+    paths:
+      - '.github/workflows/add-time-wing.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add time acorn and wing
+        run: python3 .github/scripts/add_time_wing.py
+      - name: Validate JavaScript
+        run: node --check game.js
+      - name: Commit gameplay items
+        run: |
+          git config user.name "stusaurus"
+          git config user.email "kiyo0625puma@yahoo.co.jp"
+          git add game.js index.html style.css
+          git commit -m "feat: add time acorn and Pteran wing progression items"
+          git push
