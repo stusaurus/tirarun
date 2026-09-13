@@ -7,7 +7,9 @@
   const nativeRoundRect = proto.roundRect;
   const nativeDrawImage = proto.drawImage;
 
+  const groundPath = 'A7BA4F1C-80DD-458C-9C82-CC34BACD83ED.png';
   const candidatePaths = [
+    groundPath,
     '045F6B8F-3A48-43DE-9D49-E5C8EAC312DD.png',
     '210F6CF8-1C02-465D-B05F-A1299907CF78.png',
     '306923B0-212A-4007-95CC-3C3C9004229A.png',
@@ -124,8 +126,12 @@
     for (const entry of list) {
       if (!entry) continue;
       const img = entry.img;
+      if (entry.src === groundPath) {
+        assets.ground = img;
+        continue;
+      }
       const ratio = img.naturalWidth / img.naturalHeight;
-      if (ratio >= 2.55) assets.ground = img;
+      if (ratio >= 2.55 && !assets.ground) assets.ground = img;
       else if (ratio >= 1.72 && ratio <= 2.35) assets.platform = img;
       else if (ratio >= 1.28 && ratio <= 1.72) decor.push(img);
       else if (ratio <= .78) backgrounds.push(img);
@@ -243,17 +249,11 @@
     if (!assets.ground) return false;
     const b = alphaBounds(assets.ground);
     const visibleRatio = b.w / b.h;
-    const desiredH = Math.max(110, h + 10);
-    const desiredW = desiredH * visibleRatio;
-    const scale = desiredW > w ? 1 : (w/visibleRatio)/desiredH;
-    const dh = desiredH * scale;
+    const dh = Math.max(118, h + 8);
     const dw = dh * visibleRatio;
-    let offsetX = 0;
-    while (offsetX < w) {
-      const tileW = Math.min(dw, w-offsetX);
-      const srcW = b.w * (tileW/dw);
-      nativeDrawImage.call(ctx, assets.ground, b.x,b.y,srcW,b.h, x+offsetX,y-8,tileW,dh);
-      offsetX += tileW;
+    const scroll = (performance.now() * .28) % dw;
+    for (let dx = x - scroll; dx < x + w; dx += dw) {
+      nativeDrawImage.call(ctx, assets.ground, b.x, b.y, b.w, b.h, dx, y - 8, dw, dh);
     }
 
     if (assets.grass) {
