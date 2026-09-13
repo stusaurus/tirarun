@@ -250,8 +250,8 @@
   });
 
   function speed() {
-    const eventBoost = eventMode === 'rush' ? 48 : eventMode === 'bonus' ? 12 : 0;
-    return Math.min(555, 275 + distance * .0062 + (player.fever > 0 ? 25 : 0) + eventBoost);
+    const eventBoost = eventMode === 'rush' ? 20 : eventMode === 'bonus' ? 12 : 0;
+    return Math.min(540, 275 + distance * .0062 + (player.fever > 0 ? 25 : 0) + eventBoost);
   }
 
   function addChestnut(x, y, scale=1) {
@@ -371,7 +371,6 @@
       addChestnut(x, groundY - 33, .86);
       addChestnut(x + 68, groundY - 37, 1.02);
       addChestnut(x + 142, groundY - 33, .88);
-      addChestnut(x + 214, groundY - 39, 1.06);
     } else if (kind === 1) {
       addChestnut(x, groundY - 33, .9);
       addChestnut(x + 90, groundY - 50, 1.22);
@@ -385,14 +384,12 @@
       addChestnut(x, groundY - 33, .84);
       addChestnut(x + 72, groundY - 33, .84);
       addChestnut(x + 168, groundY - 42, 1.10);
-      addChestnut(x + 252, groundY - 33, .86);
     } else {
       addChestnut(x, groundY - 34, 1.0);
       addChestnut(x + 104, groundY - 34, .88);
       addChestnut(x + 194, groundY - 55, 1.30);
-      addChestnut(x + 292, groundY - 34, .9);
     }
-    nextPattern += 225 + Math.random() * 55;
+    nextPattern += 315 + Math.random() * 70;
   }
 
   function spawnBonusPattern() {
@@ -419,10 +416,10 @@
 
   function startEvent(type) {
     eventMode = type;
-    eventTimer = type === 'rush' ? 8.0 : 8.5;
+    eventTimer = type === 'rush' ? 7.0 : 8.5;
     eventBanner = type === 'rush' ? '🌰 KURI RUSH!' : '⭐ BONUS RUN!';
     eventBannerTimer = 1.8;
-    nextPattern = Math.min(nextPattern, distance + W + (type === 'rush' ? 85 : 150));
+    nextPattern = Math.min(nextPattern, distance + W + (type === 'rush' ? 175 : 150));
     flash = .12;
     if (type === 'rush') {
       popText('栗ラッシュ！ よけきれ！', W*.5, H*.32, '#ffd08a', 1.1, 22);
