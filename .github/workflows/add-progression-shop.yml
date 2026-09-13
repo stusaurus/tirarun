@@ -1,0 +1,26 @@
+name: Add progression shop
+
+on:
+  push:
+    paths:
+      - '.github/workflows/add-progression-shop.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply progression shop patch
+        run: python3 .github/scripts/add_progression_shop.py
+      - name: Validate JavaScript
+        run: node --check game.js
+      - name: Commit progression shop
+        run: |
+          git config user.name "stusaurus"
+          git config user.email "kiyo0625puma@yahoo.co.jp"
+          git add game.js index.html style.css
+          git commit -m "feat: add coins shop upgrades and loadouts"
+          git push
