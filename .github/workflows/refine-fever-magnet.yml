@@ -24,3 +24,5 @@ jobs:
           git add game.js index.html
           git commit -m "gameplay: clarify FEVER and make magnet coin-only"
           git push
+
+# one-shot rerun after patch-script repair
