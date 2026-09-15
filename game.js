@@ -43,6 +43,7 @@
   const characterItemsEl = document.getElementById('characterItems');
   const characterGemsEl = document.getElementById('characterGems');
   const characterNoteEl = document.getElementById('characterNote');
+  const characterEffectHudEl = document.getElementById('characterEffectHud');
 
   const WORD = 'TIRAKURI';
   const LS_BEST = 'tirakuri-best-v2';
@@ -129,25 +130,25 @@
       name:'ティラノン', icon:'🦖', unlockLevel:1, maxLevel:10,
       preview:'1218B0FC-C2A9-4661-8707-C27D900A8992.png',
       desc:'ティラクリの主人公。元気いっぱいに走るノン！',
-      trait:'スタンダード', traitDesc:'クセのない基本性能。今まで通りの操作感で遊べる。'
+      trait:'スタンダード', traitDesc:'Lvで走行SCOREが上昇。Lv5・10でCOMBO猶予も伸びる。'
     },
     mininon: {
       name:'ミニノン', icon:'🐣', unlockLevel:3, maxLevel:10,
       preview:'97A7C3F6-D44A-4770-A6CF-55052F221207.png',
       desc:'黄色い幼稚園服で元気いっぱい。USER Lv.3で仲間入り！',
-      trait:'ちいさな体', traitDesc:'当たり判定が小さく、コインを少し多く集められる。'
+      trait:'ちいさな体', traitDesc:'Lvでコインボーナスと小さな当たり判定がさらに強化される。'
     },
     stegon: {
       name:'ステゴン', icon:'🦕', unlockLevel:6, maxLevel:10,
       preview:'8EF97C48-064E-4EDC-95DA-7EB00DA5F1D1.png',
       desc:'どっしり走る、やさしいステゴサウルス。',
-      trait:'ステゴンガード', traitDesc:'一定時間ごとに栗を1回だけ踏みつぶして無傷で進める。'
+      trait:'ステゴンガード', traitDesc:'Lvで再使用が短縮。Lv5でガード後無敵、Lv10で前方の栗も連鎖破壊。'
     },
     pteran: {
       name:'プテラン', icon:'🪽', unlockLevel:10, maxLevel:10,
       preview:'D1D9FF27-0E76-4D9C-8F0E-862356577F01.png',
       desc:'翼を広げて駆ける、空が得意な仲間。',
-      trait:'滑空', traitDesc:'落下がゆるやかになり、空中ルートを長く移動できる。'
+      trait:'滑空', traitDesc:'Lvで滑空が強化。Lv5・10で空中走行SCOREボーナスも付く。'
     }
   };
 
@@ -231,6 +232,99 @@
     return Math.max(1, Math.min(6, Math.ceil(lv / 2)));
   }
 
+  function tiranonScoreBonus(lv) {
+    return Math.max(0, Math.min(9, lv - 1));
+  }
+
+  function tiranonComboGrace(lv) {
+    return lv >= 10 ? .40 : lv >= 5 ? .20 : 0;
+  }
+
+  function mininonCoinBonusRate(lv) {
+    return .06 + (lv - 1) * .012 + (lv >= 5 ? .04 : 0) + (lv >= 10 ? .04 : 0);
+  }
+
+  function mininonShrinkForLevel(lv) {
+    return Math.min(.08, .03 + (lv - 1) * .004 + (lv >= 5 ? .008 : 0) + (lv >= 10 ? .008 : 0));
+  }
+
+  function stegonCooldownForLevel(lv) {
+    return Math.max(8.8, 16 - (lv - 1) * .8);
+  }
+
+  function pteranGravityForLevel(lv) {
+    return Math.max(1120, 1500 - (lv - 1) * 35 - (lv >= 5 ? 30 : 0) - (lv >= 10 ? 35 : 0));
+  }
+
+  function pteranFallCapForLevel(lv) {
+    return Math.max(340, 520 - (lv - 1) * 16 - (lv >= 5 ? 15 : 0) - (lv >= 10 ? 20 : 0));
+  }
+
+  function pteranAirScoreBonus(lv) {
+    return lv >= 10 ? 15 : lv >= 5 ? 8 : 0;
+  }
+
+  function characterEffectSummary(id, lv=characterLevel(id)) {
+    if (id === 'tiranon') {
+      const scoreBonus = tiranonScoreBonus(lv);
+      const grace = tiranonComboGrace(lv);
+      return `走行SCORE +${scoreBonus}%${grace ? `・COMBO猶予 +${grace.toFixed(1)}秒` : ''}`;
+    }
+    if (id === 'mininon') {
+      return `コイン +${Math.round(mininonCoinBonusRate(lv)*100)}%・当たり判定 約${Math.round(mininonShrinkForLevel(lv)*100)}%縮小`;
+    }
+    if (id === 'stegon') {
+      let text = `ガード再使用 ${stegonCooldownForLevel(lv).toFixed(1)}秒`;
+      if (lv >= 5) text += '・発動後0.55秒無敵';
+      if (lv >= 10) text += '・前方栗+1破壊';
+      return text;
+    }
+    if (id === 'pteran') {
+      const glide = Math.max(0, Math.round((520 - pteranFallCapForLevel(lv)) / 520 * 100));
+      const air = pteranAirScoreBonus(lv);
+      return `滑空強化 +${glide}%${air ? `・空中走行SCORE +${air}%` : ''}`;
+    }
+    return '';
+  }
+
+  function characterRunScoreMultiplier() {
+    if (selectedCharacter === 'tiranon') return 1 + tiranonScoreBonus(characterLevel('tiranon')) / 100;
+    if (selectedCharacter === 'pteran' && player.y + player.h < groundY - 2) {
+      return 1 + pteranAirScoreBonus(characterLevel('pteran')) / 100;
+    }
+    return 1;
+  }
+
+  function updateCharacterEffectHud() {
+    if (!characterEffectHudEl) return;
+    const ch = CHARACTER_CATALOG[selectedCharacter];
+    const lv = characterLevel(selectedCharacter);
+    characterEffectHudEl.hidden = state !== 'playing' && state !== 'paused';
+    if (characterEffectHudEl.hidden || !ch) return;
+    characterEffectHudEl.classList.remove('ready','active');
+    let status = '';
+    if (selectedCharacter === 'tiranon') {
+      const bonus = tiranonScoreBonus(lv);
+      const grace = tiranonComboGrace(lv);
+      status = `⭐ 走行SCORE +${bonus}%${grace ? `　COMBO +${grace.toFixed(1)}秒` : ''}`;
+    } else if (selectedCharacter === 'mininon') {
+      status = `🪙 +${Math.round(mininonCoinBonusRate(lv)*100)}%　回避判定 -${Math.round(mininonShrinkForLevel(lv)*100)}%`;
+    } else if (selectedCharacter === 'stegon') {
+      if (stegonGuardCooldown <= 0) {
+        status = `🛡 ガード READY${lv >= 10 ? '　連鎖破壊' : lv >= 5 ? '　+無敵' : ''}`;
+        characterEffectHudEl.classList.add('ready');
+      } else {
+        status = `🛡 ガード あと${stegonGuardCooldown.toFixed(1)}秒`;
+      }
+    } else if (selectedCharacter === 'pteran') {
+      const gliding = player.vy > 0 && player.descentTime >= .18 && player.y + player.h < groundY - 2;
+      const air = pteranAirScoreBonus(lv);
+      status = gliding ? `🪽 滑空中${air ? `　空中SCORE +${air}%` : ''}` : `🪽 滑空強化${air ? `　空中SCORE +${air}%` : ''}`;
+      if (gliding) characterEffectHudEl.classList.add('active');
+    }
+    characterEffectHudEl.innerHTML = `<b>${ch.icon} ${ch.name} Lv.${lv}</b><span>${status}</span>`;
+  }
+
   function renderCharacters() {
     if (!characterItemsEl) return;
     if (characterGemsEl) characterGemsEl.textContent = `💎 ${gems}`;
@@ -256,7 +350,10 @@
           actions += `<button disabled>MAX Lv.10</button>`;
         }
       }
-      return `<div class="characterItem ${!unlocked?'locked':''} ${selected?'active':''} ${unavailable?'coming':''}"><div class="characterPreview">${preview}</div><div class="characterInfo"><strong>${ch.name}</strong><small>${ch.desc}</small><small>特性：<b>${ch.trait}</b>｜${ch.traitDesc}</small><em>${status}</em><div class="characterActions">${actions}</div></div></div>`;
+      const effectNow = characterEffectSummary(id, lv);
+      const effectNext = lv < ch.maxLevel ? characterEffectSummary(id, lv + 1) : '';
+      const milestone = lv + 1 === 5 || lv + 1 === 10 ? ' ★節目強化' : '';
+      return `<div class="characterItem ${!unlocked?'locked':''} ${selected?'active':''} ${unavailable?'coming':''}"><div class="characterPreview">${preview}</div><div class="characterInfo"><strong>${ch.name}</strong><small>${ch.desc}</small><small>特性：<b>${ch.trait}</b>｜${ch.traitDesc}</small><small class="charLevelEffect">Lv.${lv}効果：${effectNow}</small>${effectNext ? `<small class="charLevelNext">次 Lv.${lv+1}${milestone}：${effectNext}</small>` : '<small class="charLevelNext max">レベル効果 MAX</small>'}<em>${status}</em><div class="characterActions">${actions}</div></div></div>`;
     }).join('');
     const selected = CHARACTER_CATALOG[selectedCharacter];
     if (characterNoteEl) characterNoteEl.textContent = `現在：${selected.name} Lv.${characterLevel(selectedCharacter)}　特性：${selected.trait}`;
@@ -731,7 +828,8 @@
   function registerAvoid(o, near=false) {
     combo++;
     comboPeak = Math.max(comboPeak, combo);
-    comboTimer = near ? 2.15 : 1.72;
+    const comboGrace = selectedCharacter === 'tiranon' ? tiranonComboGrace(characterLevel('tiranon')) : 0;
+    comboTimer = (near ? 2.15 : 1.72) + comboGrace;
     const mult = comboMultiplier();
     const gain = (near ? 45 : 18) * mult;
     scoreFloat += gain;
@@ -827,6 +925,8 @@
       saveProgress();
       updateProfileUi();
       renderCharacters();
+      if (characterNoteEl) characterNoteEl.textContent = `LEVEL UP! ${ch.name} Lv.${lv+1}　${characterEffectSummary(id, lv+1)}`;
+      updateCharacterEffectHud();
       beep(880, .09, 'sine', .03);
       return;
     }
@@ -1178,7 +1278,7 @@
     const prevBottom = player.y + player.h;
 
     distance += worldSp * dt;
-    scoreFloat += (worldSp * dt / 18) * (player.fever > 0 ? 3 : 1);
+    scoreFloat += (worldSp * dt / 18) * (player.fever > 0 ? 3 : 1) * characterRunScoreMultiplier();
     score = Math.floor(scoreFloat);
     updateFlowGoals();
 
@@ -1234,13 +1334,13 @@
     if (player.wing > 0) {
       gravity = Math.max(620, 980 - (wingLevel - 1) * 90);
     } else if (pteranLevel > 0 && player.vy > 0) {
-      gravity = Math.max(1180, 1500 - (pteranLevel - 1) * 35);
+      gravity = pteranGravityForLevel(pteranLevel);
     }
     player.vy += gravity * dt;
     if (player.wing > 0 && player.vy > 0) {
       player.vy = Math.min(player.vy, Math.max(220, 340 - (wingLevel - 1) * 25));
     } else if (pteranLevel > 0 && player.vy > 0) {
-      player.vy = Math.min(player.vy, Math.max(360, 520 - (pteranLevel - 1) * 16));
+      player.vy = Math.min(player.vy, pteranFallCapForLevel(pteranLevel));
       if (Math.random() < dt * 8) {
         particles.push({x:player.x + player.w*.20, y:player.y + player.h*.58, vx:-55-Math.random()*35, vy:(Math.random()-.5)*28, life:.24, color:'#d9f6ff', r:2+Math.random()*2});
       }
@@ -1316,7 +1416,7 @@
     }
 
     const mininonLevel = selectedCharacter === 'mininon' ? characterLevel('mininon') : 0;
-    const mininonShrink = mininonLevel > 0 ? Math.min(.07, .03 + (mininonLevel - 1) * .004) : 0;
+    const mininonShrink = mininonLevel > 0 ? mininonShrinkForLevel(mininonLevel) : 0;
     const pbox = {
       x: player.x + player.w * (.18 + mininonShrink),
       y: player.y + player.h * (.12 + mininonShrink * .6),
@@ -1358,14 +1458,30 @@
         }
         if (selectedCharacter === 'stegon' && stegonGuardCooldown <= 0) {
           const lv = characterLevel('stegon');
-          stegonGuardCooldown = Math.max(8.5, 16 - (lv - 1) * .75);
+          stegonGuardCooldown = stegonCooldownForLevel(lv);
           const guardScore = 30 + lv * 5;
-          scoreFloat += guardScore;
+          let chainScore = 0;
+          if (lv >= 5) player.invincible = Math.max(player.invincible, .55);
+          if (lv >= 10) {
+            let chainTarget = null;
+            let chainDist = Infinity;
+            for (const target of objects) {
+              if (target === o || target.type !== 'kuri') continue;
+              const d = target.x - player.x;
+              if (d > 0 && d < 280 && d < chainDist) { chainTarget = target; chainDist = d; }
+            }
+            if (chainTarget) {
+              chainTarget.type = 'cleared';
+              chainScore = 30;
+              burst(chainTarget.x + chainTarget.w/2, chainTarget.y + chainTarget.h/2, '#ffd08a', 13, 175);
+            }
+          }
+          scoreFloat += guardScore + chainScore;
           score = Math.floor(scoreFloat);
           shake = Math.max(shake, 5);
           flash = Math.max(flash, .06);
           burst(o.x + o.w/2, o.y + o.h/2, '#f1b36b', 16, 185);
-          popText(`ステゴンガード！ +${guardScore}`, player.x + player.w*.65, player.y - 14, '#ffe0a4', .85, 18);
+          popText(`ステゴンガード！ +${guardScore + chainScore}${chainScore ? ' 連鎖！' : lv >= 5 ? ' +無敵' : ''}`, player.x + player.w*.65, player.y - 14, '#ffe0a4', .85, 18);
           objects.splice(i, 1);
           beep(175, .09, 'square', .035);
           setTimeout(() => beep(310, .07, 'sine', .022), 65);
@@ -1438,7 +1554,7 @@
     let mininonExtra = 0;
     if (selectedCharacter === 'mininon') {
       const lv = characterLevel('mininon');
-      mininonCoinMeter += gain * (.06 + (lv - 1) * .012);
+      mininonCoinMeter += gain * mininonCoinBonusRate(lv);
       mininonExtra = Math.floor(mininonCoinMeter);
       if (mininonExtra > 0) {
         mininonCoinMeter -= mininonExtra;
@@ -1590,6 +1706,7 @@
     feverBuff.style.display = player.fever > 0 ? 'block' : 'none';
     timeBuff.style.display = player.timeSlow > 0 ? 'block' : 'none';
     wingBuff.style.display = player.wing > 0 ? 'block' : 'none';
+    updateCharacterEffectHud();
   }
 
   function burst(x, y, color, n=8, power=120) {
