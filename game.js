@@ -37,6 +37,12 @@
   const profileTotalEl = document.getElementById('profileTotal');
   const profileNextEl = document.getElementById('profileNext');
   const profileProgressEl = document.getElementById('profileProgress');
+  const characterBtn = document.getElementById('characterBtn');
+  const characterPanel = document.getElementById('characterPanel');
+  const characterCloseBtn = document.getElementById('characterCloseBtn');
+  const characterItemsEl = document.getElementById('characterItems');
+  const characterGemsEl = document.getElementById('characterGems');
+  const characterNoteEl = document.getElementById('characterNote');
 
   const WORD = 'TIRAKURI';
   const LS_BEST = 'tirakuri-best-v2';
@@ -48,6 +54,8 @@
   const LS_TOTAL_SCORE = 'tirakuri-total-score-v1';
   const LS_USER_LEVEL = 'tirakuri-user-level-v1';
   const LS_GEMS = 'tirakuri-gems-v1';
+  const LS_SELECTED_CHARACTER = 'tirakuri-selected-character-v1';
+  const LS_CHARACTER_LEVELS = 'tirakuri-character-levels-v1';
 
   function readJson(key, fallback) {
     try {
@@ -92,6 +100,8 @@
   let owned = readJson(LS_OWNED, {shield:true, magnet:true, giant:true, roar:false, slow:false, wing:false});
   let levels = readJson(LS_LEVELS, {shield:1, magnet:1, giant:1, roar:0, slow:0, wing:0});
   let loadout = readJson(LS_LOADOUT, ['shield','magnet','giant']);
+  let selectedCharacter = localStorage.getItem(LS_SELECTED_CHARACTER) || 'tiranon';
+  let characterLevels = readJson(LS_CHARACTER_LEVELS, {tiranon:1, mininon:1, stegon:1, pteran:1});
 
   const ITEM_CATALOG = {
     shield: {name:'シールド', icon:'🛡️', desc:'1回だけ栗を防ぐ', basic:true, rank:0, maxLevel:1},
@@ -114,11 +124,40 @@
     }
   };
 
+  const CHARACTER_CATALOG = {
+    tiranon: {
+      name:'ティラノン', icon:'🦖', unlockLevel:1, maxLevel:10,
+      preview:'1218B0FC-C2A9-4661-8707-C27D900A8992.png',
+      desc:'ティラクリの主人公。元気いっぱいに走るノン！'
+    },
+    mininon: {
+      name:'ミニノン', icon:'🐣', unlockLevel:3, maxLevel:10, coming:true,
+      preview:null, desc:'USER Lv.3で仲間入り予定。イラスト準備中！'
+    },
+    stegon: {
+      name:'ステゴン', icon:'🦕', unlockLevel:6, maxLevel:10,
+      preview:'8730184C-FBB1-4BDA-BF85-FF4F24AED3C7.png',
+      desc:'どっしり走る、やさしいステゴサウルス。'
+    },
+    pteran: {
+      name:'プテラン', icon:'🪽', unlockLevel:10, maxLevel:10,
+      preview:'8E0967A2-6213-4014-AD0F-204E1BB3A89F.png',
+      desc:'翼を広げて駆ける、空が得意な仲間。'
+    }
+  };
+
   owned = Object.assign({shield:true, magnet:true, giant:true, roar:false, slow:false, wing:false}, owned || {});
   owned.shield = owned.magnet = owned.giant = true;
   levels = Object.assign({shield:1, magnet:1, giant:1, roar:0, slow:0, wing:0}, levels || {});
   loadout = Array.isArray(loadout) ? loadout.filter((id, i, a) => ITEM_CATALOG[id] && owned[id] && a.indexOf(id) === i).slice(0,5) : [];
   if (!loadout.length) loadout = ['shield','magnet','giant'];
+  characterLevels = Object.assign({tiranon:1, mininon:1, stegon:1, pteran:1}, characterLevels || {});
+  for (const id of Object.keys(CHARACTER_CATALOG)) {
+    characterLevels[id] = Math.max(1, Math.min(CHARACTER_CATALOG[id].maxLevel, Number(characterLevels[id] || 1)));
+  }
+  if (!CHARACTER_CATALOG[selectedCharacter] || CHARACTER_CATALOG[selectedCharacter].coming || userLevel < CHARACTER_CATALOG[selectedCharacter].unlockLevel) {
+    selectedCharacter = 'tiranon';
+  }
 
   function saveProgress() {
     localStorage.setItem(LS_COINS, String(wallet));
@@ -129,6 +168,8 @@
     localStorage.setItem(LS_TOTAL_SCORE, String(totalScore));
     localStorage.setItem(LS_USER_LEVEL, String(userLevel));
     localStorage.setItem(LS_GEMS, String(gems));
+    localStorage.setItem(LS_SELECTED_CHARACTER, selectedCharacter);
+    localStorage.setItem(LS_CHARACTER_LEVELS, JSON.stringify(characterLevels));
   }
 
   function rankItems(rank) {
@@ -167,6 +208,67 @@
     if (profileNextEl) profileNextEl.textContent = userLevel >= 99 ? 'MAX LEVEL' : `次Lvまで ${(nextThreshold - totalScore).toLocaleString()}`;
     if (profileProgressEl) profileProgressEl.style.width = `${Math.round(progress * 100)}%`;
     if (shopRankEl) shopRankEl.textContent = `ITEM RANK ${currentItemRank()}`;
+    if (characterGemsEl) characterGemsEl.textContent = `💎 ${gems}`;
+    if (characterBtn && CHARACTER_CATALOG[selectedCharacter]) characterBtn.textContent = `${CHARACTER_CATALOG[selectedCharacter].icon} キャラ`;
+  }
+
+  function isCharacterUnlocked(id) {
+    const ch = CHARACTER_CATALOG[id];
+    return !!ch && userLevel >= ch.unlockLevel;
+  }
+
+  function characterLevel(id) {
+    return Math.max(1, Number(characterLevels[id] || 1));
+  }
+
+  function characterUpgradeCost(id) {
+    const lv = characterLevel(id);
+    return Math.max(1, Math.min(6, Math.ceil(lv / 2)));
+  }
+
+  function renderCharacters() {
+    if (!characterItemsEl) return;
+    if (characterGemsEl) characterGemsEl.textContent = `💎 ${gems}`;
+    characterItemsEl.innerHTML = Object.entries(CHARACTER_CATALOG).map(([id, ch]) => {
+      const unlocked = isCharacterUnlocked(id);
+      const selected = selectedCharacter === id;
+      const lv = characterLevel(id);
+      const unavailable = !!ch.coming;
+      let status = '';
+      if (!unlocked) status = `🔒 USER Lv.${ch.unlockLevel}で解放`;
+      else if (unavailable) status = 'COMING SOON・イラスト準備中';
+      else status = `CHAR Lv.${lv} / ${ch.maxLevel}${selected ? '　使用中' : ''}`;
+      const preview = ch.preview
+        ? `<img src="${ch.preview}" alt="${ch.name}">`
+        : `<span>${ch.icon}</span>`;
+      let actions = '';
+      if (unlocked && !unavailable) {
+        actions += `<button data-char-action="select" data-id="${id}" class="${selected?'selected':''}">${selected?'使用中 ✓':'このキャラで走る'}</button>`;
+        if (lv < ch.maxLevel) {
+          const cost = characterUpgradeCost(id);
+          actions += `<button data-char-action="level" data-id="${id}" ${gems < cost ? 'disabled' : ''}>Lv.UP 💎${cost}</button>`;
+        } else {
+          actions += `<button disabled>MAX Lv.10</button>`;
+        }
+      }
+      return `<div class="characterItem ${!unlocked?'locked':''} ${selected?'active':''} ${unavailable?'coming':''}"><div class="characterPreview">${preview}</div><div class="characterInfo"><strong>${ch.name}</strong><small>${ch.desc}</small><em>${status}</em><div class="characterActions">${actions}</div></div></div>`;
+    }).join('');
+    const selected = CHARACTER_CATALOG[selectedCharacter];
+    if (characterNoteEl) characterNoteEl.textContent = `現在：${selected.name} Lv.${characterLevel(selectedCharacter)}　USER Lvが上がると使える仲間が増えるノン！`;
+    updateProfileUi();
+  }
+
+  function openCharacters() {
+    if (state === 'playing' || state === 'damage') return;
+    renderCharacters();
+    shopPanel.hidden = true;
+    cardEl.style.display = 'none';
+    characterPanel.hidden = false;
+  }
+
+  function closeCharacters() {
+    characterPanel.hidden = true;
+    cardEl.style.display = 'block';
   }
 
   function isEquipped(id) {
@@ -310,6 +412,8 @@
     run2: 'BBCB72FB-8753-443F-8266-DE96E161B845.png',
     jump: '611DD895-B471-4366-B1DC-231EF0F51CF8.png',
     damage: 'DE619F5B-547D-4A02-866D-6E072FD3FF44.png',
+    stegonChar: '8730184C-FBB1-4BDA-BF85-FF4F24AED3C7.png',
+    pteranChar: '8E0967A2-6213-4014-AD0F-204E1BB3A89F.png',
     kuri: 'A29A0A58-DA6B-49B8-AD9F-D595AE41741C.png',
     shield: '55E5A798-2A2D-466B-9A4C-6B865812C4D9.png',
     magnet: '43F86E52-798E-4091-ADAC-DEF03A44AD20.png',
@@ -432,6 +536,7 @@
     pauseBtn.hidden = true;
     shake = 10;
     const oldUserLevel = userLevel;
+    const unlockedBefore = new Set(Object.entries(CHARACTER_CATALOG).filter(([, ch]) => oldUserLevel >= ch.unlockLevel && !ch.coming).map(([id]) => id));
     const newBest = score > best;
     if (newBest) {
       best = score;
@@ -448,6 +553,9 @@
     runCoins = 0;
     saveProgress();
     updateProfileUi();
+    const newlyUnlockedCharacters = Object.entries(CHARACTER_CATALOG)
+      .filter(([id, ch]) => !ch.coming && isCharacterUnlocked(id) && !unlockedBefore.has(id))
+      .map(([, ch]) => ch.name);
     bestEl.textContent = '/ ' + best;
     resultEl.style.display = 'block';
     const comboLine = comboPeak >= 3
@@ -459,10 +567,14 @@
     const levelLine = earnedGems > 0
       ? `<br><span style="font-size:14px;color:#7d62bd">LEVEL UP! USER Lv.${userLevel}　💎 +${earnedGems}</span>`
       : `<br><span style="font-size:12px;color:#7d7892">USER Lv.${userLevel}　累計SCORE ${totalScore.toLocaleString()}</span>`;
-    resultEl.innerHTML = `SCORE ${score}<br><span style="font-size:15px;color:#6a7c75">BEST ${best}</span>${comboLine}${coinLine}${nextLine}${levelLine}`;
-    subtitleEl.textContent = earnedGems > 0 ? 'ユーザーレベルが上がったノン！' : newBest ? 'ベストスコアだノン！' : 'もう1回いくノン？';
+    const charUnlockLine = newlyUnlockedCharacters.length
+      ? `<br><span style="font-size:14px;color:#3d8a78">NEW! ${newlyUnlockedCharacters.join('・')}が使用可能！</span>`
+      : '';
+    resultEl.innerHTML = `SCORE ${score}<br><span style="font-size:15px;color:#6a7c75">BEST ${best}</span>${comboLine}${coinLine}${nextLine}${levelLine}${charUnlockLine}`;
+    subtitleEl.textContent = newlyUnlockedCharacters.length ? '新しい仲間が増えたノン！' : earnedGems > 0 ? 'ユーザーレベルが上がったノン！' : newBest ? 'ベストスコアだノン！' : 'もう1回いくノン？';
     startBtn.textContent = 'もう一度あそぶ';
     renderShop();
+    renderCharacters();
     overlay.style.display = 'grid';
   }
 
@@ -515,6 +627,7 @@
   function openShop() {
     if (state === 'playing' || state === 'damage') return;
     renderShop();
+    characterPanel.hidden = true;
     cardEl.style.display = 'none';
     shopPanel.hidden = false;
   }
@@ -600,7 +713,7 @@
   resumeBtn.addEventListener('click', e => { e.stopPropagation(); resumeGame(); });
   pausePanel.addEventListener('pointerdown', e => e.stopPropagation());
   overlay.addEventListener('pointerdown', e => {
-    if (e.target.closest && e.target.closest('#shopPanel,#shopBtn,#startBtn,#mute')) return;
+    if (e.target.closest && e.target.closest('#shopPanel,#characterPanel,#shopBtn,#characterBtn,#startBtn,#mute')) return;
     input(e);
   }, {passive:false});
   startBtn.addEventListener('pointerdown', e => e.stopPropagation());
@@ -610,6 +723,38 @@
   shopCloseBtn.addEventListener('pointerdown', e => e.stopPropagation());
   shopCloseBtn.addEventListener('click', e => { e.stopPropagation(); closeShop(); });
   shopPanel.addEventListener('pointerdown', e => e.stopPropagation());
+  characterBtn.addEventListener('pointerdown', e => e.stopPropagation());
+  characterBtn.addEventListener('click', e => { e.stopPropagation(); openCharacters(); });
+  characterCloseBtn.addEventListener('pointerdown', e => e.stopPropagation());
+  characterCloseBtn.addEventListener('click', e => { e.stopPropagation(); closeCharacters(); });
+  characterPanel.addEventListener('pointerdown', e => e.stopPropagation());
+  characterItemsEl.addEventListener('click', e => {
+    const btn = e.target.closest('button[data-char-action]');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    const ch = CHARACTER_CATALOG[id];
+    if (!ch || ch.coming || !isCharacterUnlocked(id)) return;
+    if (btn.dataset.charAction === 'select') {
+      selectedCharacter = id;
+      saveProgress();
+      renderCharacters();
+      beep(720, .08, 'sine', .025);
+      return;
+    }
+    if (btn.dataset.charAction === 'level') {
+      const lv = characterLevel(id);
+      if (lv >= ch.maxLevel) return;
+      const cost = characterUpgradeCost(id);
+      if (gems < cost) return;
+      gems -= cost;
+      characterLevels[id] = lv + 1;
+      saveProgress();
+      updateProfileUi();
+      renderCharacters();
+      beep(880, .09, 'sine', .03);
+      return;
+    }
+  });
   shopItemsEl.addEventListener('click', e => {
     const btn = e.target.closest('button[data-action]');
     if (!btn) return;
@@ -1526,6 +1671,20 @@
     ctx.restore();
   }
 
+  function currentPlayerSprite(airborne=false, damaged=false) {
+    if (selectedCharacter === 'stegon') return 'stegonChar';
+    if (selectedCharacter === 'pteran') return 'pteranChar';
+    if (damaged) return 'damage';
+    if (airborne) return 'jump';
+    return Math.floor(player.runT * 2.2) % 2 ? 'run1' : 'run2';
+  }
+
+  function currentPlayerVisualScale(spriteName) {
+    if (selectedCharacter === 'stegon') return 1.92;
+    if (selectedCharacter === 'pteran') return 1.86;
+    return spriteName === 'damage' ? 1.72 : 1.68;
+  }
+
   function drawPlayer() {
     const p=player;
     const airborne=p.y+p.h<groundY-2;
@@ -1548,12 +1707,8 @@
       ctx.beginPath();ctx.arc(0,0,p.w*.84,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;
     }
 
-    const spriteName = state === 'damage' || performance.now() < p.damageUntil
-      ? 'damage'
-      : airborne
-        ? 'jump'
-        : Math.floor(p.runT * 2.2) % 2 ? 'run1' : 'run2';
-    const visualSize = p.w * (spriteName === 'damage' ? 1.72 : 1.68);
+    const spriteName = currentPlayerSprite(airborne, state === 'damage' || performance.now() < p.damageUntil);
+    const visualSize = p.w * currentPlayerVisualScale(spriteName);
     if (drawSprite(spriteName, -visualSize/2, p.h/2-visualSize, visualSize, visualSize)) {
       ctx.restore();
       return;
@@ -1721,10 +1876,8 @@
       ctx.stroke();
     }
 
-    const spriteName = player.y + player.h < groundY - 2
-      ? 'jump'
-      : Math.floor(player.runT * 2.2) % 2 ? 'run1' : 'run2';
-    const visualSize = player.w * 1.68;
+    const spriteName = currentPlayerSprite(player.y + player.h < groundY - 2, false);
+    const visualSize = player.w * currentPlayerVisualScale(spriteName);
     for (let i = 2; i >= 1; i--) {
       ctx.globalAlpha = (.13 + i * .045) * strength;
       drawSprite(
