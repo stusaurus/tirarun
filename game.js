@@ -139,13 +139,13 @@
     },
     stegon: {
       name:'ステゴン', icon:'🦕', unlockLevel:6, maxLevel:10,
-      preview:'8730184C-FBB1-4BDA-BF85-FF4F24AED3C7.png',
+      preview:'8EF97C48-064E-4EDC-95DA-7EB00DA5F1D1.png',
       desc:'どっしり走る、やさしいステゴサウルス。',
       trait:'ステゴンガード', traitDesc:'一定時間ごとに栗を1回だけ踏みつぶして無傷で進める。'
     },
     pteran: {
       name:'プテラン', icon:'🪽', unlockLevel:10, maxLevel:10,
-      preview:'8E0967A2-6213-4014-AD0F-204E1BB3A89F.png',
+      preview:'D1D9FF27-0E76-4D9C-8F0E-862356577F01.png',
       desc:'翼を広げて駆ける、空が得意な仲間。',
       trait:'滑空', traitDesc:'落下がゆるやかになり、空中ルートを長く移動できる。'
     }
@@ -424,8 +424,15 @@
     mininonJump: 'BF34325B-EA6D-4DCF-83A1-0F7A8326E6A5.png',
     mininonDamage: '72F50358-ABF9-4E2F-B676-133E5104CB8E.png',
     mininonFront: '97A7C3F6-D44A-4770-A6CF-55052F221207.png',
-    stegonChar: '8730184C-FBB1-4BDA-BF85-FF4F24AED3C7.png',
-    pteranChar: '8E0967A2-6213-4014-AD0F-204E1BB3A89F.png',
+    stegonRun1: '8730184C-FBB1-4BDA-BF85-FF4F24AED3C7.png',
+    stegonRun2: 'DCB091BC-7A59-435A-9F19-78285C56A4BF.png',
+    stegonJump: 'DE557F47-D307-4934-B684-BE560F5B52D6.png',
+    stegonFront: '8EF97C48-064E-4EDC-95DA-7EB00DA5F1D1.png',
+    pteranRun1: '8E0967A2-6213-4014-AD0F-204E1BB3A89F.png',
+    pteranRun2: '304EEA32-1229-4F79-B3FD-BF2B49632167.png',
+    pteranJump: 'D364C13F-1755-481F-9D5B-0D980AEBD7A1.png',
+    pteranGlide: '13E57C5F-73B3-4919-AEAD-F456E8A57EB3.png',
+    pteranFront: 'D1D9FF27-0E76-4D9C-8F0E-862356577F01.png',
     kuri: 'A29A0A58-DA6B-49B8-AD9F-D595AE41741C.png',
     shield: '55E5A798-2A2D-466B-9A4C-6B865812C4D9.png',
     magnet: '43F86E52-798E-4091-ADAC-DEF03A44AD20.png',
@@ -1732,8 +1739,14 @@
       if (airborne) return 'mininonJump';
       return Math.floor(player.runT * 2.2) % 2 ? 'mininonRun1' : 'mininonRun2';
     }
-    if (selectedCharacter === 'stegon') return 'stegonChar';
-    if (selectedCharacter === 'pteran') return 'pteranChar';
+    if (selectedCharacter === 'stegon') {
+      if (airborne) return 'stegonJump';
+      return Math.floor(player.runT * 2.0) % 2 ? 'stegonRun1' : 'stegonRun2';
+    }
+    if (selectedCharacter === 'pteran') {
+      if (airborne) return player.vy > 55 ? 'pteranGlide' : 'pteranJump';
+      return Math.floor(player.runT * 2.15) % 2 ? 'pteranRun1' : 'pteranRun2';
+    }
     if (damaged) return 'damage';
     if (airborne) return 'jump';
     return Math.floor(player.runT * 2.2) % 2 ? 'run1' : 'run2';
@@ -1741,8 +1754,12 @@
 
   function currentPlayerVisualScale(spriteName) {
     if (selectedCharacter === 'mininon') return spriteName === 'mininonDamage' ? 1.76 : 1.74;
-    if (selectedCharacter === 'stegon') return 1.92;
-    if (selectedCharacter === 'pteran') return 1.86;
+    if (selectedCharacter === 'stegon') return spriteName === 'stegonJump' ? 1.90 : 1.92;
+    if (selectedCharacter === 'pteran') {
+      if (spriteName === 'pteranGlide') return 1.98;
+      if (spriteName === 'pteranJump') return 1.90;
+      return 1.86;
+    }
     return spriteName === 'damage' ? 1.72 : 1.68;
   }
 
