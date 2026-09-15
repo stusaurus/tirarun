@@ -148,7 +148,7 @@
       name:'プテラン', icon:'🪽', unlockLevel:10, maxLevel:10,
       preview:'D1D9FF27-0E76-4D9C-8F0E-862356577F01.png',
       desc:'翼を広げて駆ける、空が得意な仲間。',
-      trait:'滑空', traitDesc:'Lvで滑空が強化。Lv5・10で空中走行SCOREボーナスも付く。'
+      trait:'滑空', traitDesc:'空中で長押し中だけ滑空。指を離すと通常落下し、Lvで滑空ゲージが伸びる。'
     }
   };
 
@@ -264,6 +264,10 @@
     return lv >= 10 ? 15 : lv >= 5 ? 8 : 0;
   }
 
+  function pteranGlideMaxSeconds(lv) {
+    return 1.8 + (lv - 1) * .18 + (lv >= 5 ? .35 : 0) + (lv >= 10 ? .45 : 0);
+  }
+
   function characterEffectSummary(id, lv=characterLevel(id)) {
     if (id === 'tiranon') {
       const scoreBonus = tiranonScoreBonus(lv);
@@ -282,14 +286,14 @@
     if (id === 'pteran') {
       const glide = Math.max(0, Math.round((520 - pteranFallCapForLevel(lv)) / 520 * 100));
       const air = pteranAirScoreBonus(lv);
-      return `滑空強化 +${glide}%${air ? `・空中走行SCORE +${air}%` : ''}`;
+      return `長押し滑空 ${pteranGlideMaxSeconds(lv).toFixed(1)}秒・落下軽減 +${glide}%${air ? `・滑空中SCORE +${air}%` : ''}`;
     }
     return '';
   }
 
   function characterRunScoreMultiplier() {
     if (selectedCharacter === 'tiranon') return 1 + tiranonScoreBonus(characterLevel('tiranon')) / 100;
-    if (selectedCharacter === 'pteran' && player.y + player.h < groundY - 2) {
+    if (selectedCharacter === 'pteran' && player.glideActive) {
       return 1 + pteranAirScoreBonus(characterLevel('pteran')) / 100;
     }
     return 1;
@@ -317,10 +321,13 @@
         status = `🛡 ガード あと${stegonGuardCooldown.toFixed(1)}秒`;
       }
     } else if (selectedCharacter === 'pteran') {
-      const gliding = player.vy > 0 && player.descentTime >= .18 && player.y + player.h < groundY - 2;
       const air = pteranAirScoreBonus(lv);
-      status = gliding ? `🪽 滑空中${air ? `　空中SCORE +${air}%` : ''}` : `🪽 滑空強化${air ? `　空中SCORE +${air}%` : ''}`;
-      if (gliding) characterEffectHudEl.classList.add('active');
+      const maxGlide = pteranGlideMaxSeconds(lv);
+      const ratio = Math.max(0, Math.min(1, player.glideEnergy / maxGlide));
+      const airborne = player.y + player.h < groundY - 2;
+      const prompt = player.glideActive ? '滑空中' : airborne ? (player.glideEnergy > .02 ? '長押しで滑空' : '滑空ゲージ0') : 'ジャンプ後 長押しで滑空';
+      status = `🪽 ${prompt}${air && player.glideActive ? `　SCORE +${air}%` : ''}<i class="glideGauge"><u style="width:${Math.round(ratio*100)}%"></u></i><small>${player.glideEnergy.toFixed(1)} / ${maxGlide.toFixed(1)}秒</small>`;
+      if (player.glideActive) characterEffectHudEl.classList.add('active');
     }
     characterEffectHudEl.innerHTML = `<b>${ch.icon} ${ch.name} Lv.${lv}</b><span>${status}</span>`;
   }
@@ -589,7 +596,8 @@
     x: 88, y: 0, w: 48, h: 48, vy: 0, jumps: 0,
     shield: false, invincible: 0, magnet: 0, giant: 0, fever: 0,
     timeSlow: 0, wing: 0,
-    runT: 0, squash: 0, damageUntil: 0, descentTime: 0, hitElapsed: 0
+    runT: 0, squash: 0, damageUntil: 0, descentTime: 0, hitElapsed: 0,
+    glideHeld: false, glideActive: false, glideEnergy: 0
   };
 
   const stages = [
@@ -665,7 +673,9 @@
     Object.assign(player, {
       y: groundY - 48, w:48, h:48, vy:0, jumps:0,
       shield:false, invincible:0, magnet:0, giant:0, fever:0, timeSlow:0, wing:0, runT:0, squash:0,
-      damageUntil:0, descentTime:0, hitElapsed:0
+      damageUntil:0, descentTime:0, hitElapsed:0,
+      glideHeld:false, glideActive:false,
+      glideEnergy:selectedCharacter === 'pteran' ? pteranGlideMaxSeconds(characterLevel('pteran')) : 0
     });
     overlay.style.display = 'none';
     pausePanel.hidden = true;
@@ -677,6 +687,8 @@
   function pauseGame() {
     if (state !== 'playing') return;
     state = 'paused';
+    player.glideHeld = false;
+    player.glideActive = false;
     pausePanel.hidden = false;
     pauseBtn.hidden = true;
     if (audioCtx && audioCtx.state === 'running') audioCtx.suspend().catch(() => {});
@@ -852,6 +864,8 @@
     player.damageUntil = performance.now() + 560;
     player.hitElapsed = 0;
     player.descentTime = 0;
+    player.glideHeld = false;
+    player.glideActive = false;
     player.vy = 0;
     shake = 5;
     flash = 0;
@@ -872,15 +886,26 @@
 
   function input(e) {
     if (e && e.type === 'keydown' && !['Space','ArrowUp'].includes(e.code)) return;
+    if (e && e.type === 'keydown' && e.repeat) return;
     if (e && e.cancelable) e.preventDefault();
     if (state === 'title' || state === 'over') {
       reset();
       return;
     }
+    if (state === 'playing' && selectedCharacter === 'pteran') player.glideHeld = true;
     jump();
   }
 
+  function releaseGlide(e) {
+    if (e && e.cancelable) e.preventDefault();
+    player.glideHeld = false;
+    player.glideActive = false;
+  }
+
   canvas.addEventListener('pointerdown', input, {passive:false});
+  canvas.addEventListener('pointerup', releaseGlide, {passive:false});
+  canvas.addEventListener('pointercancel', releaseGlide, {passive:false});
+  addEventListener('pointerup', releaseGlide, {passive:false});
   pauseBtn.addEventListener('pointerdown', e => e.stopPropagation());
   pauseBtn.addEventListener('click', e => { e.stopPropagation(); pauseGame(); });
   resumeBtn.addEventListener('pointerdown', e => e.stopPropagation());
@@ -981,6 +1006,9 @@
     }
   });
   addEventListener('keydown', input, {passive:false});
+  addEventListener('keyup', e => {
+    if (['Space','ArrowUp'].includes(e.code)) releaseGlide(e);
+  }, {passive:false});
   addEventListener('keydown', e => {
     if (!['Escape','KeyP'].includes(e.code)) return;
     e.preventDefault();
@@ -1330,19 +1358,23 @@
 
     const wingLevel = Math.max(1, itemLevel('wing'));
     const pteranLevel = selectedCharacter === 'pteran' ? characterLevel('pteran') : 0;
+    const pteranCanGlide = pteranLevel > 0 && player.vy > 0 && player.descentTime >= .12 && player.glideHeld && player.glideEnergy > 0;
+    player.glideActive = !!pteranCanGlide;
     let gravity = 1850;
     if (player.wing > 0) {
       gravity = Math.max(620, 980 - (wingLevel - 1) * 90);
-    } else if (pteranLevel > 0 && player.vy > 0) {
+    } else if (player.glideActive) {
       gravity = pteranGravityForLevel(pteranLevel);
     }
     player.vy += gravity * dt;
     if (player.wing > 0 && player.vy > 0) {
       player.vy = Math.min(player.vy, Math.max(220, 340 - (wingLevel - 1) * 25));
-    } else if (pteranLevel > 0 && player.vy > 0) {
+    } else if (player.glideActive) {
+      player.glideEnergy = Math.max(0, player.glideEnergy - dt);
+      if (player.glideEnergy <= 0) player.glideActive = false;
       player.vy = Math.min(player.vy, pteranFallCapForLevel(pteranLevel));
-      if (Math.random() < dt * 8) {
-        particles.push({x:player.x + player.w*.20, y:player.y + player.h*.58, vx:-55-Math.random()*35, vy:(Math.random()-.5)*28, life:.24, color:'#d9f6ff', r:2+Math.random()*2});
+      if (Math.random() < dt * 11) {
+        particles.push({x:player.x + player.w*.20, y:player.y + player.h*.58, vx:-65-Math.random()*45, vy:(Math.random()-.5)*28, life:.26, color:'#d9f6ff', r:2+Math.random()*2});
       }
     }
     player.y += player.vy * dt;
@@ -1356,6 +1388,7 @@
         player.y = o.y - player.h;
         player.vy = -930;
         player.jumps = 1;
+        if (selectedCharacter === 'pteran') player.glideEnergy = pteranGlideMaxSeconds(characterLevel('pteran'));
         player.squash = .12;
         popText(o.route ? 'HIGH ROUTE! ★×2' : 'SUPER JUMP!', player.x + player.w*.8, player.y - 10, '#ffe66b', o.route ? .9 : .75, 17);
         burst(player.x + player.w*.45, o.y, '#ffd34f', 14, 160);
@@ -1376,6 +1409,8 @@
         player.y = o.y - player.h;
         player.vy = 0;
         player.jumps = 0;
+        player.glideActive = false;
+        if (selectedCharacter === 'pteran') player.glideEnergy = pteranGlideMaxSeconds(characterLevel('pteran'));
       }
     }
 
@@ -1383,6 +1418,8 @@
       player.y = groundY - player.h;
       player.vy = 0;
       player.jumps = 0;
+      player.glideActive = false;
+      if (selectedCharacter === 'pteran') player.glideEnergy = pteranGlideMaxSeconds(characterLevel('pteran'));
     }
 
     player.descentTime = player.vy > 0 ? player.descentTime + dt : 0;
@@ -1961,7 +1998,7 @@
       return Math.floor(player.runT * 2.0) % 2 ? 'stegonRun1' : 'stegonRun2';
     }
     if (selectedCharacter === 'pteran') {
-      if (airborne) return player.descentTime >= .18 ? 'pteranGlide' : 'pteranJump';
+      if (airborne) return (player.glideActive || player.wing > 0) ? 'pteranGlide' : 'pteranJump';
       return Math.floor(player.runT * 2.15) % 2 ? 'pteranRun1' : 'pteranRun2';
     }
     if (damaged) return 'damage';
