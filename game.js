@@ -2453,7 +2453,8 @@
   }
 
   function loop(t) {
-    const dt = Math.min(.032, (t-last)/1000 || 0);
+    // A click can reset last after this animation frame was queued.
+    const dt = Math.max(0, Math.min(.032, (t-last)/1000 || 0));
     last = t;
     update(dt);
     draw();
