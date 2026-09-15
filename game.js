@@ -896,8 +896,7 @@
     jump();
   }
 
-  function releaseGlide(e) {
-    if (e && e.cancelable) e.preventDefault();
+  function releaseGlide() {
     player.glideHeld = false;
     player.glideActive = false;
   }
