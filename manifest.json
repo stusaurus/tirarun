@@ -1,0 +1,19 @@
+{
+  "id": "./",
+  "name": "ティラクリ | ワンタップラン",
+  "short_name": "ティラクリ",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "theme_color": "#dff7ef",
+  "background_color": "#dff7ef",
+  "icons": [
+    {
+      "src": "./1218B0FC-C2A9-4661-8707-C27D900A8992.png",
+      "sizes": "1254x1254",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

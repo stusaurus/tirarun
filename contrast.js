@@ -29,7 +29,7 @@
   function isFullCanvasPass(ctx, x, y, w, h) {
     const cssW = ctx.canvas.clientWidth || ctx.canvas.width || 1;
     const cssH = ctx.canvas.clientHeight || ctx.canvas.height || 1;
-    return x === 0 && y === 0 && w >= cssW * 0.90 && h >= cssH * 0.90;
+    return ctx.canvas.id === 'game' && ctx.backgroundPass && x === 0 && y === 0 && w >= cssW * 0.90 && h >= cssH * 0.90;
   }
 
   proto.fillRect = function(x, y, w, h) {

@@ -51,7 +51,7 @@
   // Lower only the background image tone a little. Ground, platforms, items and Tiranon
   // are drawn afterwards, so they stay brighter and easier to read.
   proto.fillRect = function(x, y, w, h) {
-    const isFullCanvas =
+    const isFullCanvas = this.canvas.id === 'game' && this.backgroundPass &&
       x === 0 && y === 0 &&
       w >= this.canvas.clientWidth * 0.9 &&
       h >= this.canvas.clientHeight * 0.9;

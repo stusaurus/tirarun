@@ -332,10 +332,10 @@
   };
 
   proto.fillRect = function(x,y,w,h) {
-    if (!ready) return Reflect.apply(nativeFillRect, this, arguments);
+    if (!ready || this.canvas.id !== 'game') return Reflect.apply(nativeFillRect, this, arguments);
     const style = typeof this.fillStyle === 'string' ? this.fillStyle.toLowerCase() : '';
 
-    if (x === 0 && y === 0 && w >= this.canvas.clientWidth*.9 && h >= this.canvas.clientHeight*.9) {
+    if (this.backgroundPass && x === 0 && y === 0 && w >= this.canvas.clientWidth*.9 && h >= this.canvas.clientHeight*.9) {
       if (drawStageBackground(this, x,y,w,h)) return;
     }
     if (stageGround.has(style) && x === 0 && w > 250 && h > 70) {

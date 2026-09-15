@@ -210,7 +210,7 @@
     if (profileLevelEl) profileLevelEl.textContent = `USER Lv.${userLevel}`;
     if (profileGemsEl) profileGemsEl.textContent = `💎 ${gems}`;
     if (profileTotalEl) profileTotalEl.textContent = `累計SCORE ${totalScore.toLocaleString()}`;
-    if (profileNextEl) profileNextEl.textContent = userLevel >= 99 ? 'MAX LEVEL' : `次Lvまで ${(nextThreshold - totalScore).toLocaleString()}`;
+    if (profileNextEl) profileNextEl.textContent = userLevel >= 99 ? 'MAX LEVEL' : `次のUSER Lvまで ${(nextThreshold - totalScore).toLocaleString()}`;
     if (profileProgressEl) profileProgressEl.style.width = `${Math.round(progress * 100)}%`;
     if (shopRankEl) shopRankEl.textContent = `ITEM RANK ${currentItemRank()}`;
     if (characterGemsEl) characterGemsEl.textContent = `💎 ${gems}`;
@@ -333,7 +333,7 @@
       flowGoals.push(nextScoreGoal);
     }
     flowRestPatterns = Math.max(flowRestPatterns, 1);
-    popText(`GOAL CLEAR! ${cleared.toLocaleString()}`, W*.5, H*.31, '#fff0a6', .95, 21);
+    popText(`GOAL CLEAR! ${cleared.toLocaleString()}`, W*.5, H*.30, '#fff0a6', .95, 21);
     burst(player.x + player.w/2, player.y + player.h/2, '#ffd25d', 18, 160);
     beep(820, .08, 'sine', .03);
     setTimeout(() => beep(1040, .08, 'sine', .024), 70);
@@ -439,18 +439,60 @@
     giant: '5428AE5F-D105-4FC1-B217-9EDA0009D7C5.png'
   };
   const sprites = {};
+  const hitSprites = {};
+  let hudTop = 20;
+  const uiLaneTop = () => Math.max(H*.165, hudTop+104);
+  // Remove only edge-connected near-white pixels. Enclosed cream/white details
+  // stay intact; the original PNG is never modified. Cache once, not each frame.
+  function transparentSprite(image) {
+    const surface = document.createElement('canvas');
+    const w = surface.width = image.naturalWidth;
+    const h = surface.height = image.naturalHeight;
+    const painter = surface.getContext('2d', {willReadFrequently:true});
+    painter.drawImage(image, 0, 0);
+    const pixels = painter.getImageData(0, 0, w, h);
+    const data = pixels.data;
+    const seen = new Uint8Array(w*h);
+    const queue = new Int32Array(w*h);
+    let head = 0, tail = 0;
+    function visit(i) {
+      if (seen[i]) return;
+      seen[i] = 1;
+      const k = i*4;
+      const lo = Math.min(data[k], data[k+1], data[k+2]);
+      const hi = Math.max(data[k], data[k+1], data[k+2]);
+      if (data[k+3] < 16 || (lo >= 235 && hi-lo <= 20)) queue[tail++] = i;
+    }
+    for (let x=0; x<w; x++) { visit(x); visit((h-1)*w+x); }
+    for (let y=1; y<h-1; y++) { visit(y*w); visit(y*w+w-1); }
+    while (head < tail) {
+      const i = queue[head++];
+      data[i*4+3] = 0;
+      if (i%w) visit(i-1);
+      if (i%w < w-1) visit(i+1);
+      if (i >= w) visit(i-w);
+      if (i < w*(h-1)) visit(i+w);
+    }
+    painter.putImageData(pixels, 0, 0);
+    return surface;
+  }
   for (const [name, src] of Object.entries(spritePaths)) {
     const image = new Image();
     image.decoding = 'async';
+    if (name === 'pteranRun2') {
+      image.onload = () => {
+        try { sprites[name] = transparentSprite(image); }
+        catch (_) { sprites[name] = sprites.pteranRun1; }
+      };
+    } else sprites[name] = image;
     image.src = src;
-    sprites[name] = image;
   }
 
   const player = {
     x: 88, y: 0, w: 48, h: 48, vy: 0, jumps: 0,
     shield: false, invincible: 0, magnet: 0, giant: 0, fever: 0,
     timeSlow: 0, wing: 0,
-    runT: 0, squash: 0, damageUntil: 0
+    runT: 0, squash: 0, damageUntil: 0, descentTime: 0, hitElapsed: 0
   };
 
   const stages = [
@@ -462,6 +504,7 @@
 
   function resize() {
     const r = canvas.getBoundingClientRect();
+    hudTop = parseFloat(getComputedStyle(document.getElementById('hud')).paddingTop) || 20;
     W = Math.max(320, r.width);
     H = Math.max(520, r.height);
     dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -495,6 +538,7 @@
 
   function reset() {
     state = 'playing';
+    document.body.classList.add('in-run');
     last = performance.now();
     distance = 0;
     score = 0;
@@ -524,7 +568,7 @@
     Object.assign(player, {
       y: groundY - 48, w:48, h:48, vy:0, jumps:0,
       shield:false, invincible:0, magnet:0, giant:0, fever:0, timeSlow:0, wing:0, runT:0, squash:0,
-      damageUntil:0
+      damageUntil:0, descentTime:0, hitElapsed:0
     });
     overlay.style.display = 'none';
     pausePanel.hidden = true;
@@ -544,6 +588,7 @@
   function resumeGame() {
     if (state !== 'paused') return;
     state = 'playing';
+    document.body.classList.add('in-run');
     last = performance.now();
     pausePanel.hidden = true;
     pauseBtn.hidden = false;
@@ -553,9 +598,10 @@
   function finishGame() {
     if (state !== 'playing' && state !== 'damage') return;
     state = 'over';
+    document.body.classList.remove('in-run');
     pausePanel.hidden = true;
     pauseBtn.hidden = true;
-    shake = 10;
+    shake = 0;
     const oldUserLevel = userLevel;
     const unlockedBefore = new Set(Object.entries(CHARACTER_CATALOG).filter(([, ch]) => oldUserLevel >= ch.unlockLevel && !ch.coming).map(([id]) => id));
     const newBest = score > best;
@@ -584,7 +630,7 @@
       : '';
     const coinLine = `<br><span style="font-size:15px;color:#9a7119">🪙 +${earnedCoins}　所持 ${wallet}</span>`;
     const nextRemain = Math.max(0, nextScoreGoal - score);
-    const nextLine = `<br><span style="font-size:13px;color:#7b6845">NEXT ${nextScoreGoal.toLocaleString()}まで あと${nextRemain.toLocaleString()}</span>`;
+    const nextLine = `<br><span style="font-size:13px;color:#7b6845">GOAL ${nextScoreGoal.toLocaleString()}まで あと${nextRemain.toLocaleString()}</span>`;
     const levelLine = earnedGems > 0
       ? `<br><span style="font-size:14px;color:#7d62bd">LEVEL UP! USER Lv.${userLevel}　💎 +${earnedGems}</span>`
       : `<br><span style="font-size:12px;color:#7d7892">USER Lv.${userLevel}　累計SCORE ${totalScore.toLocaleString()}</span>`;
@@ -671,7 +717,15 @@
   }
 
   function popText(text, x, y, color='#fff5a8', life=.75, size=17) {
-    floatTexts.push({text, x, y, color, life, maxLife:life, size});
+    // One message per lane; newer pickups replace stale labels.
+    if (text.startsWith('COMBO') || /KURI RUSH|BONUS RUN/.test(text)) return; // Persistent fixed counter handles combos.
+    const lane = /GOAL CLEAR|NEW RECORD|BESTまで/.test(text) ? 'goal'
+      : /RUSH|BONUS|ラッシュ|ボーナスタイム|TIRAKURI/.test(text) ? 'event' : 'pickup';
+    if (lane === 'goal') { x = W*.5; y = uiLaneTop()+100; }
+    else if (lane === 'event') { x = W*.5; y = uiLaneTop()+132; size = Math.min(size, 18); }
+    else { x = Math.max(92, Math.min(W-92, player.x+player.w*.5)); y = player.y-38; size = Math.min(size, 16); }
+    floatTexts = floatTexts.filter(f => f.lane !== lane);
+    floatTexts.push({text, x, y, color, life, maxLife:life, size, lane});
   }
 
   function registerAvoid(o, near=false) {
@@ -698,20 +752,21 @@
     resetCombo();
     state = 'damage';
     player.damageUntil = performance.now() + 560;
+    player.hitElapsed = 0;
+    player.descentTime = 0;
     player.vy = 0;
-    shake = 11;
-    flash = .16;
+    shake = 5;
+    flash = 0;
     beep(135, .22, 'sawtooth', .06);
-    burst(player.x + player.w * .72, player.y + player.h * .28, '#ffd85a', 10, 150);
-    setTimeout(() => {
-      if (state === 'damage') finishGame();
-    }, 540);
+    burst(player.x + player.w * .72, player.y + player.h * .28, '#ff896d', 14, 150);
+
   }
 
   function jump() {
     if (state !== 'playing' || player.jumps >= 2) return;
     player.vy = player.jumps === 0 ? -720 : -635;
     player.jumps++;
+    player.descentTime = 0;
     player.squash = .14;
     beep(player.jumps === 1 ? 520 : 680, .055, 'square', .035);
     burst(player.x + player.w * .35, player.y + player.h, '#ffffff', 5, 70);
@@ -1048,6 +1103,7 @@
       nextPattern = distance + W + 390;
       flash = 0;
       rushWarpTimer = RUSH_WARP_DURATION;
+      shake = Math.max(shake, 2);
       popText('栗ラッシュ！ 準備！', W*.5, H*.32, '#dff8ff', .9, 22);
       beep(390, .08, 'sine', .035);
       setTimeout(() => beep(760, .11, 'sine', .028), 65);
@@ -1102,6 +1158,17 @@
   }
 
   function update(dt) {
+    if (state === 'damage') {
+      player.hitElapsed += dt;
+      // Freeze for 90ms, then play recoil and hit particles before the result.
+      if (player.hitElapsed > .09) {
+        shake = Math.max(0, shake - dt*24);
+        for (const p of particles) { p.life -= dt; p.x += p.vx*dt; p.y += p.vy*dt; }
+        particles = particles.filter(p => p.life > 0);
+      }
+      if (player.hitElapsed >= .54) finishGame();
+      return;
+    }
     if (state !== 'playing') return;
 
     const sp = speed();
@@ -1218,6 +1285,7 @@
       player.jumps = 0;
     }
 
+    player.descentTime = player.vy > 0 ? player.descentTime + dt : 0;
     for (const o of objects) o.x -= worldSp * dt;
 
     // Magnet is intentionally a coin-only powerup. FEVER also vacuums coins,
@@ -1256,6 +1324,15 @@
       h: player.h * (.78 - mininonShrink * 1.2)
     };
 
+    const hurtbox = {...pbox};
+    if (selectedCharacter === 'stegon') Object.assign(hurtbox, {
+      x:player.x + player.w*.10, y:player.y + player.h*.34,
+      w:player.w*.80, h:player.h*.54
+    });
+    if (selectedCharacter === 'pteran') Object.assign(hurtbox, {
+      x:player.x + player.w*.20, y:player.y + player.h*.14,
+      w:player.w*.60, h:player.h*.74
+    });
     for (let i = objects.length - 1; i >= 0; i--) {
       const o = objects[i];
       if (o.x + o.w < -70) {
@@ -1264,7 +1341,7 @@
       }
       if (o.type === 'platform' || o.type === 'spring') continue;
 
-      if (o.type === 'kuri' && rectHit(pbox, o, 4)) {
+      if (o.type === 'kuri' && rectHit(hurtbox, o, 4)) {
         if (player.invincible > 0) {
           burst(o.x + o.w/2, o.y + o.h/2, '#bff7ff', 8, 125);
           objects.splice(i, 1);
@@ -1321,7 +1398,7 @@
       }
 
       if (o.type === 'kuri' && !o.passed && o.x + o.w < pbox.x - 3) {
-        const near = verticalGap(pbox, o) <= 22;
+        const near = verticalGap(hurtbox, o) <= 22;
         registerAvoid(o, near);
       }
     }
@@ -1346,7 +1423,7 @@
     for (let i = floatTexts.length - 1; i >= 0; i--) {
       const f = floatTexts[i];
       f.life -= dt;
-      f.y -= 24 * dt;
+      if (f.lane === 'pickup') f.y -= 24 * dt;
       if (f.life <= 0) floatTexts.splice(i, 1);
     }
 
@@ -1498,7 +1575,7 @@
       } else if (newRecordTimer > 0) {
         goalHudEl.textContent = '🏆 NEW RECORD!';
       } else {
-        goalHudEl.textContent = `NEXT ${nextScoreGoal.toLocaleString()}　あと ${remain.toLocaleString()}`;
+        goalHudEl.textContent = `GOAL ${nextScoreGoal.toLocaleString()}　あと ${remain.toLocaleString()}`;
       }
       goalHudEl.classList.toggle('hot', recordChase || newRecordTimer > 0);
     }
@@ -1535,12 +1612,27 @@
     ctx.roundRect(x,y,w,h,r);
   }
 
-  function drawSprite(name, x, y, w, h) {
-    const image = sprites[name];
-    if (!image || !image.complete || !image.naturalWidth) return false;
-    const scale = Math.min(w / image.naturalWidth, h / image.naturalHeight);
-    const dw = image.naturalWidth * scale;
-    const dh = image.naturalHeight * scale;
+  function drawSprite(name, x, y, w, h, hitFlash=false) {
+    let image = sprites[name];
+    if (!image || (image instanceof HTMLImageElement && (!image.complete || !image.naturalWidth))) return false;
+    const iw = image.naturalWidth || image.width;
+    const ih = image.naturalHeight || image.height;
+    if (hitFlash) {
+      if (!hitSprites[name]) {
+        const tint = document.createElement('canvas');
+        tint.width = iw; tint.height = ih;
+        const paint = tint.getContext('2d');
+        paint.drawImage(image, 0, 0);
+        paint.globalCompositeOperation = 'source-atop';
+        paint.fillStyle = 'rgba(255,55,55,.65)';
+        paint.fillRect(0, 0, iw, ih);
+        hitSprites[name] = tint;
+      }
+      image = hitSprites[name];
+    }
+    const scale = Math.min(w / iw, h / ih);
+    const dw = iw * scale;
+    const dh = ih * scale;
     ctx.drawImage(image, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
     return true;
   }
@@ -1552,7 +1644,9 @@
     grad.addColorStop(0, st.sky1);
     grad.addColorStop(1, st.sky2);
     ctx.fillStyle = grad;
+    ctx.backgroundPass = true;
     ctx.fillRect(0,0,W,H);
+    ctx.backgroundPass = false;
 
     const dark = st.name === 'ほしぞら';
     if (dark) {
@@ -1639,7 +1733,13 @@
 
   function drawKuri(o) {
     const size = Math.max(o.w, o.h) * 1.34;
-    if (drawSprite('kuri', o.x + o.w/2 - size/2, o.y + o.h - size, size, size)) return;
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,247,220,.85)';
+    ctx.shadowBlur = 2;
+    ctx.shadowOffsetY = 1;
+    const painted = drawSprite('kuri', o.x + o.w/2 - size/2, o.y + o.h - size, size, size);
+    ctx.restore();
+    if (painted) return;
     const cx=o.x+o.w/2, cy=o.y+o.h/2;
     ctx.save();
     ctx.translate(cx,cy);
@@ -1744,7 +1844,7 @@
       return Math.floor(player.runT * 2.0) % 2 ? 'stegonRun1' : 'stegonRun2';
     }
     if (selectedCharacter === 'pteran') {
-      if (airborne) return player.vy > 55 ? 'pteranGlide' : 'pteranJump';
+      if (airborne) return player.descentTime >= .18 ? 'pteranGlide' : 'pteranJump';
       return Math.floor(player.runT * 2.15) % 2 ? 'pteranRun1' : 'pteranRun2';
     }
     if (damaged) return 'damage';
@@ -1756,8 +1856,7 @@
     if (selectedCharacter === 'mininon') return spriteName === 'mininonDamage' ? 1.76 : 1.74;
     if (selectedCharacter === 'stegon') return spriteName === 'stegonJump' ? 1.90 : 1.92;
     if (selectedCharacter === 'pteran') {
-      if (spriteName === 'pteranGlide') return 1.98;
-      if (spriteName === 'pteranJump') return 1.90;
+      if (spriteName === 'pteranGlide' || spriteName === 'pteranJump') return 1.90;
       return 1.86;
     }
     return spriteName === 'damage' ? 1.72 : 1.68;
@@ -1765,13 +1864,19 @@
 
   function drawPlayer() {
     const p=player;
-    const airborne=p.y+p.h<groundY-2;
+    const airborne=p.jumps > 0 || Math.abs(p.vy) > 1;
     ctx.save();
     const bob=!airborne?Math.sin(p.runT)*2:0;
     ctx.translate(p.x+p.w/2,p.y+p.h/2+bob);
-    let sx=1,sy=1;
-    if(p.squash>0){sx=1.08;sy=.92;}
-    ctx.scale(sx,sy);
+
+    if ((state === 'damage' || state === 'over') && player.damageUntil > 0 &&
+        (selectedCharacter === 'stegon' || selectedCharacter === 'pteran')) {
+      const recoil = Math.min(1, Math.max(0, (p.hitElapsed - .09) / .18));
+      ctx.translate(-7*recoil, 2*recoil);
+      ctx.rotate(-.18*recoil);
+      ctx.scale(1-.08*recoil, 1-.08*recoil);
+
+    }
 
     if(p.invincible>0){
       const blink = .58 + .42 * Math.abs(Math.sin(performance.now() * .022));
@@ -1785,9 +1890,14 @@
       ctx.beginPath();ctx.arc(0,0,p.w*.84,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;
     }
 
-    const spriteName = currentPlayerSprite(airborne, state === 'damage' || performance.now() < p.damageUntil);
+    const spriteName = currentPlayerSprite(airborne, state === 'damage' || (state === 'over' && p.damageUntil > 0) || performance.now() < p.damageUntil);
     const visualSize = p.w * currentPlayerVisualScale(spriteName);
-    if (drawSprite(spriteName, -visualSize/2, p.h/2-visualSize, visualSize, visualSize)) {
+    // Both aerial poses use the same scale and the same torso anchor.
+    const torsoY = spriteName === 'pteranGlide' ? .63 : .64;
+    const spriteY = selectedCharacter === 'pteran' && airborne
+      ? -p.h*.18 - visualSize*torsoY : p.h/2-visualSize;
+    const hitFlash = state === 'damage' && p.hitElapsed < .28 && (selectedCharacter === 'stegon' || selectedCharacter === 'pteran');
+    if (drawSprite(spriteName, -visualSize/2, spriteY, visualSize, visualSize, hitFlash)) {
       ctx.restore();
       return;
     }
@@ -1910,7 +2020,7 @@
       ctx.stroke();
     }
     ctx.fillStyle = `rgba(255,183,82,${(1-p)*.08})`;
-    ctx.fillRect(0,0,W,H);
+    ctx.beginPath();ctx.rect(0,0,W,H);ctx.fill();
     ctx.restore();
   }
 
@@ -1923,13 +2033,6 @@
 
     ctx.save();
     ctx.globalCompositeOperation = 'screen';
-    const wash = ctx.createRadialGradient(cx, cy, 8, cx, cy, Math.max(W, H) * .75);
-    wash.addColorStop(0, `rgba(232,255,255,${.22 * strength})`);
-    wash.addColorStop(.34, `rgba(104,226,255,${.16 * strength})`);
-    wash.addColorStop(1, `rgba(88,112,255,${.035 * strength})`);
-    ctx.fillStyle = wash;
-    ctx.fillRect(0, 0, W, H);
-
     ctx.lineCap = 'round';
     for (let i = 0; i < 18; i++) {
       const a = (i / 18) * Math.PI * 2 + p * .7;
@@ -1954,27 +2057,6 @@
       ctx.stroke();
     }
 
-    const spriteName = currentPlayerSprite(player.y + player.h < groundY - 2, false);
-    const visualSize = player.w * currentPlayerVisualScale(spriteName);
-    for (let i = 2; i >= 1; i--) {
-      ctx.globalAlpha = (.13 + i * .045) * strength;
-      drawSprite(
-        spriteName,
-        player.x - visualSize * .10 - i * (18 + strength * 8),
-        player.y + player.h - visualSize,
-        visualSize,
-        visualSize
-      );
-    }
-
-    ctx.globalAlpha = .75 * strength;
-    ctx.fillStyle = '#ecfeff';
-    ctx.font = '900 18px system-ui';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.shadowColor = '#58d9ff';
-    ctx.shadowBlur = 10;
-    ctx.fillText('WARP!', W * .5, H * .29 - p * 10);
     ctx.restore();
   }
 
@@ -2219,13 +2301,13 @@
     ctx.textBaseline = 'middle';
     const w = Math.min(205, ctx.measureText(label).width + 34);
     ctx.fillStyle = '#fff4c9ee';
-    roundedRect(W/2-w/2, H*.165, w, 36, 16);
+    roundedRect(W/2-w/2, uiLaneTop(), w, 36, 16);
     ctx.fill();
     ctx.strokeStyle = '#ffc24e';
     ctx.lineWidth = 2;
     ctx.stroke();
     ctx.fillStyle = '#d97916';
-    ctx.fillText(label, W/2, H*.165 + 18);
+    ctx.fillText(label, W/2, uiLaneTop() + 18);
     ctx.restore();
   }
 
@@ -2273,13 +2355,13 @@
       ctx.textBaseline = 'top';
       ctx.font = '900 14px system-ui';
       ctx.fillStyle = '#fffdf1e8';
-      roundedRect(14, 82, 112, 39, 13);
+      roundedRect(W-126, (uiLaneTop()+166), 112, 30, 11);
       ctx.fill();
       ctx.fillStyle = '#5a4a2b';
-      ctx.fillText(`COMBO ${combo}`, 26, 90);
+      ctx.fillText(`COMBO ${combo}`, W-116, (uiLaneTop()+166)+7);
       if (mult > 1) {
         ctx.fillStyle = '#e58b2b';
-        ctx.fillText(`×${mult}`, 94, 90);
+        ctx.fillText(`×${mult}`, W-48, (uiLaneTop()+166)+7);
       }
       ctx.restore();
     }
@@ -2297,10 +2379,10 @@
         ctx.font = '900 17px system-ui';
         const w = Math.min(210, ctx.measureText(label).width + 38);
         ctx.fillStyle = eventMode === 'rush' ? '#fff1dfeb' : '#fff9cdeb';
-        roundedRect(W/2-w/2, H*.205, w, 38, 17);
+        roundedRect(W/2-w/2, (uiLaneTop()+40), w, 38, 17);
         ctx.fill();
         ctx.fillStyle = eventMode === 'rush' ? '#9b5630' : '#8b7220';
-        ctx.fillText(label, W/2, H*.205 + 19);
+        ctx.fillText(label, W/2, (uiLaneTop()+40) + 19);
         ctx.restore();
       }
     }
@@ -2325,6 +2407,23 @@
     if (shake > 0) ctx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);
     drawBackground();
     drawEventAtmosphere();
+    drawRecordChaseEffect();
+    drawRunUI();
+    drawPickupEffects();
+    drawActivePowerEffectsBehind();
+    drawActivePowerEffectsFront();
+    drawFeverEffect();
+    drawFeverExtraEffect();
+    drawRoarEffect();
+    drawRushWarpEffect();
+
+    for (const p of particles) {
+      ctx.globalAlpha=Math.max(0,p.life/.7);
+      ctx.fillStyle=p.color;
+      ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();
+    }
+    ctx.globalAlpha=1;
+
 
     for (const o of objects) if (o.type==='platform') drawPlatform(o);
     for (const o of objects) if (o.type==='spring') drawSpring(o);
@@ -2343,28 +2442,12 @@
       }
     }
 
-    drawPickupEffects();
-    drawActivePowerEffectsBehind();
     drawPlayer();
     drawLoadoutCosmetics();
-    drawActivePowerEffectsFront();
-    drawFeverEffect();
-    drawFeverExtraEffect();
-    drawRoarEffect();
-    drawRushWarpEffect();
 
-    for (const p of particles) {
-      ctx.globalAlpha=Math.max(0,p.life/.7);
-      ctx.fillStyle=p.color;
-      ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();
-    }
-    ctx.globalAlpha=1;
-
-    drawRecordChaseEffect();
-    drawRunUI();
 
     if(flash>0){
-      ctx.globalAlpha=Math.min(.65,flash*2.1);ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);ctx.globalAlpha=1;
+      ctx.globalAlpha=Math.min(.07,flash*.4);ctx.fillStyle='#fff';ctx.beginPath();ctx.rect(0,0,W,H);ctx.fill();ctx.globalAlpha=1;
     }
     ctx.restore();
   }
