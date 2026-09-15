@@ -1,0 +1,26 @@
+name: Fix Stegon transparency
+
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-stegon-transparency.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Pillow
+        run: python -m pip install pillow
+      - name: Remove edge-connected white backgrounds
+        run: python .github/scripts/fix_stegon_transparency.py
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add 8730184C-FBB1-4BDA-BF85-FF4F24AED3C7.png DCB091BC-7A59-435A-9F19-78285C56A4BF.png index.html
+          git diff --cached --quiet || git commit -m "fix: remove Stegon sprite white background"
+          git push
