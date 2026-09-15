@@ -131,8 +131,9 @@
       desc:'ティラクリの主人公。元気いっぱいに走るノン！'
     },
     mininon: {
-      name:'ミニノン', icon:'🐣', unlockLevel:3, maxLevel:10, coming:true,
-      preview:null, desc:'USER Lv.3で仲間入り予定。イラスト準備中！'
+      name:'ミニノン', icon:'🐣', unlockLevel:3, maxLevel:10,
+      preview:'97A7C3F6-D44A-4770-A6CF-55052F221207.png',
+      desc:'黄色い幼稚園服で元気いっぱい。USER Lv.3で仲間入り！'
     },
     stegon: {
       name:'ステゴン', icon:'🦕', unlockLevel:6, maxLevel:10,
@@ -412,6 +413,11 @@
     run2: 'BBCB72FB-8753-443F-8266-DE96E161B845.png',
     jump: '611DD895-B471-4366-B1DC-231EF0F51CF8.png',
     damage: 'DE619F5B-547D-4A02-866D-6E072FD3FF44.png',
+    mininonRun1: '37BA91C1-A1B6-475F-80C7-99CA9C0F4227.png',
+    mininonRun2: '634BE8E3-47BD-41B4-86E8-00583F529982.png',
+    mininonJump: 'BF34325B-EA6D-4DCF-83A1-0F7A8326E6A5.png',
+    mininonDamage: '72F50358-ABF9-4E2F-B676-133E5104CB8E.png',
+    mininonFront: '97A7C3F6-D44A-4770-A6CF-55052F221207.png',
     stegonChar: '8730184C-FBB1-4BDA-BF85-FF4F24AED3C7.png',
     pteranChar: '8E0967A2-6213-4014-AD0F-204E1BB3A89F.png',
     kuri: 'A29A0A58-DA6B-49B8-AD9F-D595AE41741C.png',
@@ -1672,6 +1678,11 @@
   }
 
   function currentPlayerSprite(airborne=false, damaged=false) {
+    if (selectedCharacter === 'mininon') {
+      if (damaged) return 'mininonDamage';
+      if (airborne) return 'mininonJump';
+      return Math.floor(player.runT * 2.2) % 2 ? 'mininonRun1' : 'mininonRun2';
+    }
     if (selectedCharacter === 'stegon') return 'stegonChar';
     if (selectedCharacter === 'pteran') return 'pteranChar';
     if (damaged) return 'damage';
@@ -1680,6 +1691,7 @@
   }
 
   function currentPlayerVisualScale(spriteName) {
+    if (selectedCharacter === 'mininon') return spriteName === 'mininonDamage' ? 1.76 : 1.74;
     if (selectedCharacter === 'stegon') return 1.92;
     if (selectedCharacter === 'pteran') return 1.86;
     return spriteName === 'damage' ? 1.72 : 1.68;
