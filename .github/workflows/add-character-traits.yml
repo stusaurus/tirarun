@@ -1,0 +1,26 @@
+name: Add character traits
+
+on:
+  push:
+    paths:
+      - '.github/workflows/add-character-traits.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply character traits patch
+        run: python .github/scripts/add_character_traits.py
+      - name: Check game syntax
+        run: node --check game.js
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add game.js index.html
+          git diff --cached --quiet || git commit -m "feat: add character traits"
+          git push
