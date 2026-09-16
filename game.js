@@ -1091,7 +1091,10 @@
 
   function speed() {
     const eventBoost = eventMode === 'rush' ? 0 : eventMode === 'bonus' ? 12 : 0;
-    return Math.min(540, 275 + distance * .0062 + (player.fever > 0 ? 25 : 0) + eventBoost);
+    // Keep at least 0.6s of visible approach on narrow screens. Use the base
+    // body size so picking up meat does not abruptly change scrolling speed.
+    const reactionCap = Math.max(275, (W - Math.max(72, W*.22) - 48 - 24) / .60);
+    return Math.min(540, reactionCap, 275 + distance * .0062 + (player.fever > 0 ? 25 : 0) + eventBoost);
   }
 
   function addChestnut(x, y, scale=1) {
@@ -1149,6 +1152,14 @@
     return 0;
   }
 
+  function normalPatternFamily(id) {
+    if ([1,5,8,11,21,23].includes(id)) return 'rhythm';
+    if ([3,4,10,16,19,25].includes(id)) return 'steps';
+    if ([9,17,20,22,27].includes(id)) return 'spring';
+    if ([0,6].includes(id)) return 'single';
+    return 'route';
+  }
+
   function pickNormalPattern(level) {
     const pools = [
       [0,1,2,3,4,5,6,7],
@@ -1156,8 +1167,20 @@
       [2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21],
       [5,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27]
     ];
-    let candidates = pools[Math.max(0, Math.min(3, level))].filter(id => !recentNormalPatterns.includes(id));
-    if (!candidates.length) candidates = pools[Math.max(0, Math.min(3, level))].slice();
+    let pool = pools[Math.max(0, Math.min(3, level))];
+    if (distance < 900) pool = [0,1,7];
+    else if (level > 0) {
+      // Fade new layouts in across 1,800 distance instead of changing half
+      // the selection pool on the first frame after a tier threshold.
+      const threshold = [0,3500,8500,15000][level];
+      const chance = .20 + .80 * Math.min(1, (distance-threshold)/1800);
+      if (Math.random() > chance) pool = pools[level-1];
+    }
+    let candidates = pool.filter(id => !recentNormalPatterns.includes(id));
+    if (!candidates.length) candidates = pool.slice();
+    const previous = recentNormalPatterns[recentNormalPatterns.length-1];
+    const varied = candidates.filter(id => normalPatternFamily(id) !== normalPatternFamily(previous));
+    if (varied.length) candidates = varied;
     const id = candidates[Math.floor(Math.random() * candidates.length)];
     recentNormalPatterns.push(id);
     if (recentNormalPatterns.length > 3) recentNormalPatterns.shift();
@@ -1182,6 +1205,7 @@
 
   function spawnNormalPattern() {
     const x = W + 90;
+    const firstObject = objects.length;
     const level = normalPatternLevel();
     const id = pickNormalPattern(level);
     let patternWidth = 390;
@@ -1222,11 +1246,13 @@
       customRewards = true;
     } else if (id === 5) {
       addChestnut(x, groundY - 33, .88);
-      addChestnut(x + 152, groundY - 35, .96);
-      addChestnut(x + 305, groundY - 33, .88);
-      addCoin(x + 76, groundY - 86);
-      addCoin(x + 228, groundY - 86);
-      patternWidth = 440;
+      // Three distinct single-jump beats, with a real landing between them.
+      addChestnut(x + 260, groundY - 35, .96);
+      addChestnut(x + 520, groundY - 33, .88);
+      addCoinArc(x + 15, groundY - 100, 3, 32, 20);
+      addCoinArc(x + 275, groundY - 100, 3, 32, 20);
+      addCoinArc(x + 535, groundY - 100, 3, 32, 20);
+      patternWidth = 650;
       customRewards = true;
     } else if (id === 6) {
       addChestnut(x + 80, groundY - 48, 1.35);
@@ -1266,13 +1292,13 @@
       customRewards = true;
     } else if (id === 11) {
       addChestnut(x, groundY - 34, .82);
-      addChestnut(x + 145, groundY - 34, .82);
-      addChestnut(x + 290, groundY - 34, .82);
-      addChestnut(x + 435, groundY - 34, .82);
-      addCoin(x + 68, groundY - 78);
-      addCoin(x + 213, groundY - 78);
-      addCoin(x + 358, groundY - 78);
-      patternWidth = 555;
+      // Two short pairs: clear a pair, land, then choose the next takeoff.
+      addChestnut(x + 82, groundY - 34, .82);
+      addChestnut(x + 350, groundY - 34, .82);
+      addChestnut(x + 432, groundY - 34, .82);
+      addCoinArc(x + 8, groundY - 105, 4, 30, 24);
+      addCoinArc(x + 358, groundY - 105, 4, 30, 24);
+      patternWidth = 570;
       customRewards = true;
     } else if (id === 12) {
       addChestnut(x + 30, groundY - 34, .95);
@@ -1371,9 +1397,12 @@
       customRewards = true;
     } else if (id === 23) {
       // Combo rhythm: Tiranon's longer combo grace makes this lane easier to maximize.
-      for (let i=0; i<5; i++) addChestnut(x + i*124, groundY - 32 - (i%2)*4, .76 + (i%3)*.05);
-      for (let i=0; i<4; i++) addCoin(x + 58 + i*124, groundY - 76 - (i%2)*8);
-      patternWidth = 620;
+      for (let beat=0; beat<3; beat++) {
+        addChestnut(x + beat*350, groundY - 32, .78);
+        addChestnut(x + beat*350 + 76, groundY - 36, .94);
+        addCoinArc(x + beat*350 + 8, groundY - 108, 4, 30, 25);
+      }
+      patternWidth = 910;
       customRewards = true;
     } else if (id === 24) {
       addPlatform(x, groundY - 62, 110);
@@ -1408,8 +1437,10 @@
       addChestnut(x + 255, groundY - 38, 1.08);
       addChestnut(x + 385, groundY - 34, .90);
       addChestnut(x + 535, groundY - 34, .82);
+      // The spring is an entrance, not an automatic clear of the whole route.
+      addChestnut(x + 380, groundY - 207, .78);
       addBonusArc(x + 125, groundY - 220, 8, 50, 32, true);
-      if (!objects.some(o => o.type === 'letter')) addLetter(x + 475, groundY - 260);
+      if (!objects.some(o => o.type === 'letter')) addLetter(x + 475, groundY - 280);
       patternWidth = 670;
       customRewards = true;
     }
@@ -1437,10 +1468,36 @@
       addEquippedItem(ix, groundY - (130 + Math.random() * 75), ['shield','magnet','giant']);
     }
 
-    // Wider authored patterns get more breathing room; late-game difficulty comes from the pattern itself,
-    // not from the next pattern spawning on top of it.
-    const rest = level >= 3 ? 105 : level >= 2 ? 118 : 132;
-    nextPattern += Math.max(350, patternWidth + rest) + Math.random() * 55;
+    // Preserve jump decisions as speed rises; scale spacing, never sprite sizes.
+    const stretch = Math.max(1, speed()/330);
+    const course = objects.slice(firstObject);
+    for (const o of course) {
+      o.x = x + (o.x-x)*stretch;
+      if (o.type === 'platform') o.w *= stretch;
+    }
+    // Random items/letters must not sit inside an obstacle or platform.
+    // Authored coin lines remain the optional, riskier route.
+    for (const reward of course) {
+      if (reward.type !== 'item' && reward.type !== 'letter') continue;
+      for (let pass=0; pass<course.length; pass++) {
+        let moved = false;
+        for (const solid of course) {
+          if (solid.type !== 'kuri' && solid.type !== 'platform') continue;
+          if (reward.x < solid.x+solid.w+18 && reward.x+reward.w > solid.x-18 &&
+              reward.y < solid.y+solid.h+12 && reward.y+reward.h > solid.y-24) {
+            reward.y = solid.y - reward.h - 28;
+            moved = true;
+          }
+        }
+        if (!moved) break;
+      }
+    }
+    // Leave a recovery window after the actual last platform/obstacle, including
+    // airborne exits. The next course cannot steal that landing space.
+    const end = Math.max(x + patternWidth*stretch,
+      ...course.map(o => o.x+o.w));
+    const rest = Math.max(level >= 3 ? 105 : level >= 2 ? 118 : 132, speed()*.45);
+    nextPattern += end-x + rest + Math.random()*55;
   }
 
   function spawnRushPattern() {
