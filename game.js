@@ -2169,17 +2169,19 @@
     scoreEl.textContent = score;
     bestEl.textContent = '/ ' + Math.max(best, score);
     coinHudEl.textContent = `🪙 ${wallet + runCoins}`;
+    const meters = Math.floor(distance / 18);
+    if (distanceHudEl) distanceHudEl.textContent = `📏 ${meters.toLocaleString()}m / BEST ${Math.max(bestDistance, meters).toLocaleString()}m`;
     if (userHudEl) userHudEl.textContent = `USER Lv.${userLevel}　💎 ${gems}`;
     if (goalHudEl) {
-      const remain = Math.max(0, nextScoreGoal - score);
+      const remain = Math.max(0, nextScoreGoal - meters);
+      let sub = '';
       if (recordChase && runBestAtStart > 0 && score <= runBestAtStart) {
-        goalHudEl.textContent = `🔥 BESTまであと ${Math.max(0, runBestAtStart-score).toLocaleString()}`;
+        sub = `<small>🔥 BEST SCOREまで ${Math.max(0, runBestAtStart-score).toLocaleString()}</small>`;
       } else if (newRecordTimer > 0) {
-        goalHudEl.textContent = '🏆 NEW RECORD!';
-      } else {
-        goalHudEl.textContent = `GOAL ${nextScoreGoal.toLocaleString()}　あと ${remain.toLocaleString()}`;
+        sub = '<small>🏆 NEW BEST SCORE!</small>';
       }
-      goalHudEl.classList.toggle('hot', recordChase || newRecordTimer > 0);
+      goalHudEl.innerHTML = `🎯 RUN GOAL ${nextScoreGoal.toLocaleString()}m　あと ${remain.toLocaleString()}m${sub}`;
+      goalHudEl.classList.toggle('hot', remain <= 100 || recordChase || newRecordTimer > 0);
     }
     let html = '';
     for (let i=0; i<WORD.length; i++) {
