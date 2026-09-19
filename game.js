@@ -22,6 +22,7 @@
   const wingBuff = document.getElementById('wingBuff');
   const coinHudEl = document.getElementById('coinHud');
   const goalHudEl = document.getElementById('goalHud');
+  const distanceHudEl = document.getElementById('distanceHud');
   const cardEl = document.getElementById('card');
   const shopBtn = document.getElementById('shopBtn');
   const shopPanel = document.getElementById('shopPanel');
@@ -57,6 +58,7 @@
   const LS_GEMS = 'tirakuri-gems-v1';
   const LS_SELECTED_CHARACTER = 'tirakuri-selected-character-v1';
   const LS_CHARACTER_LEVELS = 'tirakuri-character-levels-v1';
+  const LS_BEST_DISTANCE = 'tirakuri-best-distance-v1';
 
   function readJson(key, fallback) {
     try {
@@ -89,6 +91,7 @@
   }
 
   let best = Number(localStorage.getItem(LS_BEST) || 0);
+  let bestDistance = Math.max(0, Number(localStorage.getItem(LS_BEST_DISTANCE) || 0));
   let wallet = Math.max(0, Number(localStorage.getItem(LS_COINS) || 0));
   let totalRuns = Math.max(0, Number(localStorage.getItem(LS_RUNS) || 0));
   const storedTotalScore = localStorage.getItem(LS_TOTAL_SCORE);
@@ -130,7 +133,7 @@
       name:'ティラノン', icon:'🦖', unlockLevel:1, maxLevel:10,
       preview:'1218B0FC-C2A9-4661-8707-C27D900A8992.png',
       desc:'ティラクリの主人公。元気いっぱいに走るノン！',
-      trait:'スタンダード', traitDesc:'Lvで走行SCOREが上昇。Lv5・10でCOMBO猶予も伸びる。'
+      trait:'スタンダード', traitDesc:'Lvで走行SCOREが上昇。Lv5・10でCHAIN CLEARボーナスも伸びる。'
     },
     mininon: {
       name:'ミニノン', icon:'🐣', unlockLevel:3, maxLevel:10,
@@ -236,8 +239,8 @@
     return Math.max(0, Math.min(9, lv - 1));
   }
 
-  function tiranonComboGrace(lv) {
-    return lv >= 10 ? .40 : lv >= 5 ? .20 : 0;
+  function tiranonChainBonusRate(lv) {
+    return lv >= 10 ? .20 : lv >= 5 ? .10 : 0;
   }
 
   function mininonCoinBonusRate(lv) {
@@ -283,8 +286,8 @@
   function characterEffectSummary(id, lv=characterLevel(id)) {
     if (id === 'tiranon') {
       const scoreBonus = tiranonScoreBonus(lv);
-      const grace = tiranonComboGrace(lv);
-      return `走行SCORE +${scoreBonus}%${grace ? `・COMBO猶予 +${grace.toFixed(1)}秒` : ''}`;
+      const chainBonus = tiranonChainBonusRate(lv);
+      return `走行SCORE +${scoreBonus}%${chainBonus ? `・CHAIN精算 +${Math.round(chainBonus*100)}%` : ''}`;
     }
     if (id === 'mininon') {
       return `コイン +${Math.round(mininonCoinBonusRate(lv)*100)}%・当たり判定 約${Math.round(mininonShrinkForLevel(lv)*100)}%縮小`;
@@ -321,8 +324,8 @@
     let status = '';
     if (selectedCharacter === 'tiranon') {
       const bonus = tiranonScoreBonus(lv);
-      const grace = tiranonComboGrace(lv);
-      status = `⭐ 走行SCORE +${bonus}%${grace ? `　COMBO +${grace.toFixed(1)}秒` : ''}`;
+      const chainBonus = tiranonChainBonusRate(lv);
+      status = `⭐ 走行SCORE +${bonus}%${chainBonus ? `　CHAIN精算 +${Math.round(chainBonus*100)}%` : ''}`;
     } else if (selectedCharacter === 'mininon') {
       status = `🪙 +${Math.round(mininonCoinBonusRate(lv)*100)}%　回避判定 -${Math.round(mininonShrinkForLevel(lv)*100)}%`;
     } else if (selectedCharacter === 'stegon') {
@@ -438,10 +441,21 @@
 
   function resetFlowGoals() {
     runBestAtStart = best;
-    flowGoals = buildFlowGoals(runBestAtStart);
+    const round50 = value => Math.max(50, Math.round(value / 50) * 50);
+    if (bestDistance < 500) {
+      flowGoals = [250, 500, 850, 1300];
+    } else {
+      const raw = [
+        round50(Math.max(250, bestDistance * .35)),
+        round50(Math.max(500, bestDistance * .65)),
+        round50(Math.max(750, bestDistance * .90)),
+        round50(bestDistance + Math.max(250, bestDistance * .10))
+      ];
+      flowGoals = raw.filter((value, i) => i === 0 || value > raw[i-1]);
+    }
     flowGoalIndex = 0;
     flowGoalStart = 0;
-    nextScoreGoal = flowGoals[0] || 1500;
+    nextScoreGoal = flowGoals[0] || 250;
     flowRestPatterns = 0;
     bestApproachShown = false;
     recordChase = false;
@@ -451,23 +465,30 @@
 
   function advanceFlowGoal() {
     const cleared = nextScoreGoal;
+    const goalNo = flowGoalIndex + 1;
+    const scoreBonus = 150 + Math.min(450, (goalNo - 1) * 75);
+    const coinBonus = 2 + Math.min(4, Math.floor((goalNo - 1) / 2));
+    scoreFloat += scoreBonus;
+    score = Math.floor(scoreFloat);
+    runCoins += coinBonus;
     flowGoalStart = cleared;
     flowGoalIndex++;
     if (flowGoalIndex < flowGoals.length) {
       nextScoreGoal = flowGoals[flowGoalIndex];
     } else {
-      nextScoreGoal = roundFlowGoal(cleared + Math.max(1800, cleared * .14));
+      nextScoreGoal = Math.round((cleared + Math.max(650, cleared * .28)) / 50) * 50;
       flowGoals.push(nextScoreGoal);
     }
     flowRestPatterns = Math.max(flowRestPatterns, 1);
-    popText(`GOAL CLEAR! ${cleared.toLocaleString()}`, W*.5, H*.30, '#fff0a6', .95, 21);
-    burst(player.x + player.w/2, player.y + player.h/2, '#ffd25d', 18, 160);
+    popText(`RUN GOAL CLEAR! ${cleared.toLocaleString()}m  +${scoreBonus}  🪙+${coinBonus}`, W*.5, H*.30, '#fff0a6', 1.05, 20);
+    burst(player.x + player.w/2, player.y + player.h/2, '#ffd25d', 20, 165);
     beep(820, .08, 'sine', .03);
     setTimeout(() => beep(1040, .08, 'sine', .024), 70);
   }
 
   function updateFlowGoals() {
-    while (nextScoreGoal > 0 && score >= nextScoreGoal) advanceFlowGoal();
+    const meters = Math.floor(distance / 18);
+    while (nextScoreGoal > 0 && meters >= nextScoreGoal) advanceFlowGoal();
 
     if (runBestAtStart > 0 && score < runBestAtStart) {
       const ratio = score / runBestAtStart;
@@ -539,6 +560,10 @@
   let stegonGuardCooldown = 0;
   let mininonCoinMeter = 0;
   let recentNormalPatterns = [];
+  let chainSectionPatterns = 0;
+  let chainClears = 0;
+  let rushMistakes = 0;
+  let restartReadyAt = 0;
   const RUSH_WARP_DURATION = .95;
   const ROAR_FX_DURATION = .65;
 
@@ -695,6 +720,10 @@
     stegonGuardCooldown = 0;
     mininonCoinMeter = 0;
     recentNormalPatterns = [];
+    chainSectionPatterns = 0;
+    chainClears = 0;
+    rushMistakes = 0;
+    restartReadyAt = 0;
     resetFlowGoals();
     Object.assign(player, {
       y: groundY - 48, w:48, h:48, vy:0, jumps:0,
@@ -740,10 +769,16 @@
     shake = 0;
     const oldUserLevel = userLevel;
     const unlockedBefore = new Set(Object.entries(CHARACTER_CATALOG).filter(([, ch]) => oldUserLevel >= ch.unlockLevel && !ch.coming).map(([id]) => id));
+    const runMeters = Math.floor(distance / 18);
     const newBest = score > best;
+    const newBestDistance = runMeters > bestDistance;
     if (newBest) {
       best = score;
       localStorage.setItem(LS_BEST, String(best));
+    }
+    if (newBestDistance) {
+      bestDistance = runMeters;
+      localStorage.setItem(LS_BEST_DISTANCE, String(bestDistance));
     }
     totalRuns += 1;
     totalScore += score;
@@ -762,23 +797,29 @@
     bestEl.textContent = '/ ' + best;
     resultEl.style.display = 'block';
     const comboLine = comboPeak >= 3
-      ? `<br><span style="font-size:13px;color:#8a6b3d">MAX COMBO ${comboPeak}</span>`
+      ? `<br><span style="font-size:13px;color:#8a6b3d">MAX CHAIN ${comboPeak}　CHAIN CLEAR ${chainClears}</span>`
       : '';
+    const distanceLine = `<br><span style="font-size:15px;color:#4d7180">📏 DISTANCE ${runMeters.toLocaleString()}m　BEST ${bestDistance.toLocaleString()}m</span>`;
     const coinLine = `<br><span style="font-size:15px;color:#9a7119">🪙 +${earnedCoins}　所持 ${wallet}</span>`;
-    const nextRemain = Math.max(0, nextScoreGoal - score);
-    const nextLine = `<br><span style="font-size:13px;color:#7b6845">GOAL ${nextScoreGoal.toLocaleString()}まで あと${nextRemain.toLocaleString()}</span>`;
+    const nextRemain = Math.max(0, nextScoreGoal - runMeters);
+    const nextLine = `<br><span style="font-size:13px;color:#7b6845">🎯 RUN GOAL ${nextScoreGoal.toLocaleString()}m　あと${nextRemain.toLocaleString()}m</span>`;
     const levelLine = earnedGems > 0
       ? `<br><span style="font-size:14px;color:#7d62bd">LEVEL UP! USER Lv.${userLevel}　💎 +${earnedGems}</span>`
       : `<br><span style="font-size:12px;color:#7d7892">USER Lv.${userLevel}　累計SCORE ${totalScore.toLocaleString()}</span>`;
     const charUnlockLine = newlyUnlockedCharacters.length
       ? `<br><span style="font-size:14px;color:#3d8a78">NEW! ${newlyUnlockedCharacters.join('・')}が使用可能！</span>`
       : '';
-    resultEl.innerHTML = `SCORE ${score}<br><span style="font-size:15px;color:#6a7c75">BEST ${best}</span>${comboLine}${coinLine}${nextLine}${levelLine}${charUnlockLine}`;
+    resultEl.innerHTML = `SCORE ${score}<br><span style="font-size:15px;color:#6a7c75">BEST SCORE ${best}</span>${distanceLine}${comboLine}${coinLine}${nextLine}${levelLine}${charUnlockLine}`;
     subtitleEl.textContent = newlyUnlockedCharacters.length ? '新しい仲間が増えたノン！' : earnedGems > 0 ? 'ユーザーレベルが上がったノン！' : newBest ? 'ベストスコアだノン！' : 'もう1回いくノン？';
     startBtn.textContent = 'もう一度あそぶ';
+    restartReadyAt = performance.now() + 700;
+    startBtn.disabled = true;
     renderShop();
     renderCharacters();
     overlay.style.display = 'grid';
+    setTimeout(() => {
+      if (state === 'over') startBtn.disabled = false;
+    }, 700);
   }
 
   function renderShop() {
