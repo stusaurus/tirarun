@@ -31,3 +31,6 @@
 
 /* pteran-air-control-v2 */
 #characterEffectHud.dive{background:#eef2ffee;box-shadow:0 0 0 2px #a9bfff88,0 4px 14px #243f3620;transform:scale(1.025)}#characterEffectHud.dive .glideGauge u{background:linear-gradient(90deg,#9aa9ff,#6d7fd8)}#characterEffectHud.boost{background:#e9fbffee;box-shadow:0 0 0 2px #9be9ff99,0 4px 16px #5bbbd333;transform:scale(1.04)}#characterEffectHud.boost .glideGauge u{box-shadow:0 0 9px #8de9ff}
+
+/* goals-chain-rush-v1 */
+#distanceHud{margin-top:3px;font-size:11px;color:#477080;font-weight:900;white-space:nowrap}#goalHud{white-space:normal;min-width:164px}#goalHud small{display:block;margin-top:3px;font-size:9px;color:#a86821}#startBtn:disabled{opacity:.55;transform:translateY(-3px);box-shadow:0 3px 0 #cda264;cursor:default}@media(max-width:390px){#distanceHud{font-size:10px}#goalHud{font-size:9px;min-width:150px}}
