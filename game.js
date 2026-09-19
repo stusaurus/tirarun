@@ -887,10 +887,35 @@
   }
 
   function comboMultiplier() {
-    if (combo >= 16) return 5;
-    if (combo >= 9) return 3;
-    if (combo >= 4) return 2;
+    if (combo >= 10) return 5;
+    if (combo >= 6) return 3;
+    if (combo >= 3) return 2;
     return 1;
+  }
+
+  function settleChain() {
+    if (combo <= 0) return;
+    const chain = combo;
+    comboPeak = Math.max(comboPeak, chain);
+    const base = chain >= 10 ? 500 : chain >= 6 ? 250 : chain >= 3 ? 120 : 0;
+    if (base > 0) {
+      const bonusRate = selectedCharacter === 'tiranon' ? tiranonChainBonusRate(characterLevel('tiranon')) : 0;
+      const bonus = Math.round(base * (1 + bonusRate));
+      scoreFloat += bonus;
+      score = Math.floor(scoreFloat);
+      chainClears++;
+      popText(`CHAIN CLEAR ${chain}! +${bonus}`, player.x + player.w*.6, player.y - 16, '#fff0a6', .9, 18);
+      burst(player.x + player.w*.6, player.y + player.h*.35, '#ffe07a', 10 + Math.min(chain, 10), 125);
+      beep(720 + Math.min(chain,10)*18, .07, 'sine', .025);
+    }
+    resetCombo();
+  }
+
+  function breakChain() {
+    if (combo >= 3) {
+      popText(`CHAIN BREAK ${combo}`, player.x + player.w*.6, player.y - 14, '#ffd0bd', .65, 15);
+    }
+    resetCombo();
   }
 
   function popText(text, x, y, color='#fff5a8', life=.75, size=17) {
@@ -908,8 +933,6 @@
   function registerAvoid(o, near=false) {
     combo++;
     comboPeak = Math.max(comboPeak, combo);
-    const comboGrace = selectedCharacter === 'tiranon' ? tiranonComboGrace(characterLevel('tiranon')) : 0;
-    comboTimer = (near ? 2.15 : 1.72) + comboGrace;
     const mult = comboMultiplier();
     const gain = (near ? 45 : 18) * mult;
     scoreFloat += gain;
@@ -918,8 +941,8 @@
       popText(`ギリギリ！ +${gain}`, player.x + player.w*.7, player.y - 12, '#ffd55a', .85, 18);
       burst(player.x + player.w*.75, player.y + player.h*.45, '#ffd55a', 8, 100);
       beep(830, .05, 'square', .028);
-    } else if (combo === 4 || combo === 9 || combo === 16) {
-      popText(`COMBO ×${mult}`, player.x + player.w*.8, player.y - 8, '#fff1a8', .8, 17);
+    } else if (combo === 3 || combo === 6 || combo === 10) {
+      popText(`CHAIN ×${mult}`, player.x + player.w*.8, player.y - 8, '#fff1a8', .8, 17);
       beep(650 + mult*70, .055, 'sine', .026);
     }
     o.passed = true;
@@ -984,10 +1007,11 @@
     if (e && e.type === 'keydown' && !['Space','ArrowUp'].includes(e.code)) return;
     if (e && e.type === 'keydown' && e.repeat) return;
     if (e && e.cancelable) e.preventDefault();
-    if (state === 'title' || state === 'over') {
+    if (state === 'title') {
       reset();
       return;
     }
+    if (state === 'over') return;
     if (state === 'playing' && selectedCharacter === 'pteran') {
       player.glideHeld = true;
       if (player.diveActive && pteranIsAirborne()) {
@@ -1021,7 +1045,12 @@
     input(e);
   }, {passive:false});
   startBtn.addEventListener('pointerdown', e => e.stopPropagation());
-  startBtn.addEventListener('click', e => { e.stopPropagation(); closeShop(); reset(); });
+  startBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    if (state === 'over' && performance.now() < restartReadyAt) return;
+    closeShop();
+    reset();
+  });
   shopBtn.addEventListener('pointerdown', e => e.stopPropagation());
   shopBtn.addEventListener('click', e => { e.stopPropagation(); openShop(); });
   shopCloseBtn.addEventListener('pointerdown', e => e.stopPropagation());
@@ -1537,6 +1566,11 @@
     // airborne exits. The next course cannot steal that landing space.
     const end = Math.max(x + patternWidth*stretch,
       ...course.map(o => o.x+o.w));
+    chainSectionPatterns++;
+    if (chainSectionPatterns >= 3) {
+      objects.push({type:'chainEnd', x:end+34, y:0, w:1, h:1});
+      chainSectionPatterns = 0;
+    }
     const rest = Math.max(level >= 3 ? 105 : level >= 2 ? 118 : 132, speed()*.45);
     nextPattern += end-x + rest + Math.random()*55;
   }
@@ -1586,11 +1620,15 @@
   }
 
   function startEvent(type) {
+    settleChain();
+    chainSectionPatterns = 0;
+    objects = objects.filter(o => o.type !== 'chainEnd');
     eventMode = type;
     eventTimer = type === 'rush' ? 7.45 : 8.5;
     eventBanner = type === 'rush' ? '🌰 KURI RUSH!' : '⭐ BONUS RUN!';
     eventBannerTimer = 1.8;
     if (type === 'rush') {
+      rushMistakes = 0;
       // Clear every dangerous chestnut in front of Tiranon, then leave a long
       // run-up so the first rush obstacle always enters visibly from offscreen.
       objects = objects.filter(o => o.type !== 'kuri' || o.x < player.x - 24);
@@ -1620,12 +1658,18 @@
         eventBanner = '';
         flowRestPatterns = Math.max(flowRestPatterns, ended === 'rush' ? 2 : 1);
         if (ended === 'rush') {
-          scoreFloat += 300;
+          const perfect = rushMistakes === 0;
+          const rushScore = perfect ? 1000 : 500;
+          const rushCoins = perfect ? 20 : 10;
+          scoreFloat += rushScore;
           score = Math.floor(scoreFloat);
-          flash = .18;
-          popText('RUSH CLEAR! +300', W*.5, H*.30, '#ffe0a0', 1.0, 20);
-          burst(player.x + player.w/2, player.y + player.h/2, '#ffb45f', 16, 150);
-          beep(760, .09, 'square', .03);
+          runCoins += rushCoins;
+          flash = perfect ? .28 : .18;
+          popText(perfect ? `PERFECT RUSH! +${rushScore}  🪙+${rushCoins}` : `RUSH CLEAR! +${rushScore}  🪙+${rushCoins}`, W*.5, H*.30, perfect ? '#fff2a8' : '#ffe0a0', 1.15, 21);
+          burst(player.x + player.w/2, player.y + player.h/2, perfect ? '#ffd95f' : '#ffb45f', perfect ? 28 : 18, perfect ? 205 : 160);
+          beep(perfect ? 920 : 760, .10, 'square', .032);
+          if (perfect) setTimeout(() => beep(1180, .12, 'sine', .026), 80);
+          settleChain();
         } else {
           popText('NICE BONUS!', W*.5, H*.30, '#fff5a8', .75, 17);
         }
@@ -1701,10 +1745,6 @@
       beep(700, .08, 'sine', .024);
     }
 
-    if (comboTimer > 0) {
-      comboTimer -= dt;
-      if (comboTimer <= 0) resetCombo();
-    }
     rushWarpTimer = Math.max(0, rushWarpTimer - dt);
     roarFx = Math.max(0, roarFx - dt);
     newRecordTimer = Math.max(0, newRecordTimer - dt);
@@ -1877,9 +1917,18 @@
         objects.splice(i, 1);
         continue;
       }
+      if (o.type === 'chainEnd') {
+        if (o.x < player.x) {
+          settleChain();
+          objects.splice(i, 1);
+        }
+        continue;
+      }
       if (o.type === 'platform' || o.type === 'spring') continue;
 
       if (o.type === 'kuri' && rectHit(hurtbox, o, 4)) {
+        if (eventMode === 'rush') rushMistakes++;
+        breakChain();
         if (player.invincible > 0) {
           burst(o.x + o.w/2, o.y + o.h/2, '#bff7ff', 8, 125);
           objects.splice(i, 1);
@@ -1928,7 +1977,6 @@
         if (player.shield) {
           player.shield = false;
           player.invincible = 1.25;
-          resetCombo();
           flash = .12;
           shake = 6;
           burst(o.x + o.w/2, o.y + o.h/2, '#8de8ff', 18, 165);
@@ -2923,7 +2971,7 @@
       roundedRect(W-126, (uiLaneTop()+166), 112, 30, 11);
       ctx.fill();
       ctx.fillStyle = '#5a4a2b';
-      ctx.fillText(`COMBO ${combo}`, W-116, (uiLaneTop()+166)+7);
+      ctx.fillText(`CHAIN ${combo}`, W-116, (uiLaneTop()+166)+7);
       if (mult > 1) {
         ctx.fillStyle = '#e58b2b';
         ctx.fillText(`×${mult}`, W-48, (uiLaneTop()+166)+7);
