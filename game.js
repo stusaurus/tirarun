@@ -3078,3 +3078,4 @@
   renderShop();
   requestAnimationFrame(loop);
 })();
+// release-check: goals-chain-rush-v1
