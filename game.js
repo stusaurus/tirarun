@@ -508,14 +508,18 @@
   function updateBuildHud() {
     if (!buildHudEl) return;
     const active = Object.entries(runBuild).filter(([, lv]) => lv > 0);
-    buildHudEl.hidden = !active.length || !['playing','paused','build'].includes(state);
+    buildHudEl.hidden = !['playing','paused','build'].includes(state);
     if (buildHudEl.hidden) return;
     const live = [];
     if (buildBoostTimer > 0) live.push(`⚡${buildBoostTimer.toFixed(1)}s×${buildBoostHits}`);
     if (buildGoldTimer > 0) live.push(`🪙GOLD ${buildGoldTimer.toFixed(1)}s`);
     if (buildBreakerTimer > 0) live.push(`🌰BREAK ${buildBreakerTimer.toFixed(1)}s`);
     if (buildEchoShields > 0) live.push(`🔮×${buildEchoShields}`);
-    buildHudEl.innerHTML = `<b>RUN BUILD</b><span>${active.map(([id,lv]) => `${RUN_BUILD_CATALOG[id].icon}${lv}`).join(' ')}${live.length ? `<small>${live.join('　')}</small>` : ''}</span>`;
+    const ownedText = active.length ? active.map(([id,lv]) => `${RUN_BUILD_CATALOG[id].icon}${lv}`).join(' ') : '未取得';
+    const nextText = pendingRunBuildCheckpoint
+      ? `⚡ BUILD CHANCE待機中`
+      : `NEXT ${nextRunBuildAt.toLocaleString()}m`;
+    buildHudEl.innerHTML = `<b>RUN BUILD</b><span>${ownedText}<small>${live.length ? live.join('　') + '　' : ''}${nextText}</small></span>`;
   }
 
   function pickRunBuildChoices() {
@@ -528,8 +532,31 @@
     return pool.slice(0, 3);
   }
 
-  function queueRunBuildChoice(cleared, scoreBonus, coinBonus) {
-    pendingRunBuildCheckpoint = {cleared, scoreBonus, coinBonus};
+  function queueRunBuildChoice(cleared) {
+    if (pendingRunBuildCheckpoint) return;
+    pendingRunBuildCheckpoint = {cleared};
+    flowRestPatterns = Math.max(flowRestPatterns, 2);
+    eventCooldown = Math.max(eventCooldown, 6);
+    popText(`⚡ BUILD CHANCE! ${cleared.toLocaleString()}m`, W*.5, H*.30, '#ddffc3', .9, 18);
+  }
+
+  function nextBuildMilestoneAfter(cleared, count) {
+    if (cleared < 500) return 500;
+    if (cleared < 1200) return 1200;
+    if (cleared < 2000) return 2000;
+    if (cleared < 3000) return 3000;
+    const interval = Math.min(1500, 1200 + Math.floor(Math.max(0, count - 4) / 2) * 100);
+    return cleared + interval;
+  }
+
+  function updateRunBuildMilestones() {
+    if (pendingRunBuildCheckpoint || state !== 'playing') return;
+    const meters = Math.floor(distance / 18);
+    if (meters < nextRunBuildAt) return;
+    const cleared = nextRunBuildAt;
+    runBuildChoiceCount++;
+    nextRunBuildAt = nextBuildMilestoneAfter(cleared, runBuildChoiceCount);
+    queueRunBuildChoice(cleared);
   }
 
   function canOpenRunBuildChoice() {
@@ -540,7 +567,7 @@
     return !dangerNear;
   }
 
-  function openRunBuildChoice(cleared, scoreBonus, coinBonus) {
+  function openRunBuildChoice(cleared) {
     pendingRunBuildChoices = pickRunBuildChoices();
     if (!pendingRunBuildChoices.length || !runBuildPanelEl || !runBuildChoicesEl) return false;
     state = 'build';
@@ -549,7 +576,7 @@
     player.diveActive = false;
     pauseBtn.hidden = true;
     runBuildPanelEl.hidden = false;
-    if (runBuildGoalEl) runBuildGoalEl.textContent = `🎯 ${cleared.toLocaleString()}m CLEAR　+SCORE ${scoreBonus} / 🪙+${coinBonus}`;
+    if (runBuildGoalEl) runBuildGoalEl.textContent = `⚡ BUILD CHANCE　${cleared.toLocaleString()}m到達`;
     runBuildChoicesEl.innerHTML = pendingRunBuildChoices.map(id => {
       const perk = RUN_BUILD_CATALOG[id];
       const next = runBuild[id] + 1;
@@ -567,7 +594,7 @@
     if (!canOpenRunBuildChoice()) return false;
     const data = pendingRunBuildCheckpoint;
     pendingRunBuildCheckpoint = null;
-    return openRunBuildChoice(data.cleared, data.scoreBonus, data.coinBonus);
+    return openRunBuildChoice(data.cleared);
   }
 
   function buildSmashAhead(label, count, range, color, coinEach=0) {
@@ -711,10 +738,6 @@
     burst(player.x + player.w/2, player.y + player.h/2, '#ffd25d', 20, 165);
     beep(820, .08, 'sine', .03);
     setTimeout(() => beep(1040, .08, 'sine', .024), 70);
-    if (goalNo % 2 === 0) {
-      queueRunBuildChoice(cleared, scoreBonus, coinBonus);
-      popText('BUILD CHANCE! 安全地帯で選択', W*.5, H*.30, '#ddffc3', .9, 18);
-    }
   }
 
   function updateFlowGoals() {
@@ -796,6 +819,8 @@
   let rushMistakes = 0;
   let restartReadyAt = 0;
   let runBuild = createRunBuildState();
+  let runBuildChoiceCount = 0;
+  let nextRunBuildAt = 500;
   let pendingRunBuildChoices = [];
   let pendingRunBuildCheckpoint = null;
   let buildBoostTimer = 0;
@@ -969,6 +994,8 @@
     rushMistakes = 0;
     restartReadyAt = 0;
     runBuild = createRunBuildState();
+    runBuildChoiceCount = 0;
+    nextRunBuildAt = 500;
     pendingRunBuildChoices = [];
     pendingRunBuildCheckpoint = null;
     buildBoostTimer = 0;
@@ -2008,6 +2035,7 @@
     scoreFloat += (worldSp * dt / 18) * (player.fever > 0 ? 3 : 1) * characterRunScoreMultiplier();
     score = Math.floor(scoreFloat);
     updateFlowGoals();
+    updateRunBuildMilestones();
 
     const feverBefore = player.fever;
     const magnetBefore = player.magnet;
