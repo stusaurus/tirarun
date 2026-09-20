@@ -535,10 +535,14 @@
 
   function queueRunBuildChoice(cleared) {
     if (pendingRunBuildCheckpoint) return;
+    // Queue silently during an event. The actual choice opens only after the
+    // event and nearby danger are gone, so KURI RUSH keeps its visual focus.
     pendingRunBuildCheckpoint = {cleared};
     flowRestPatterns = Math.max(flowRestPatterns, 2);
     eventCooldown = Math.max(eventCooldown, 6);
-    popText(`⚡ BUILD CHANCE! ${cleared.toLocaleString()}m`, W*.5, H*.30, '#ddffc3', .9, 18);
+    if (eventMode === 'normal') {
+      popText(`⚡ BUILD CHANCE! ${cleared.toLocaleString()}m`, W*.5, H*.30, '#ddffc3', .72, 16);
+    }
   }
 
   function nextBuildMilestoneAfter(cleared, count) {
@@ -695,21 +699,13 @@
 
   function resetFlowGoals() {
     runBestAtStart = best;
-    const round50 = value => Math.max(50, Math.round(value / 50) * 50);
-    if (bestDistance < 500) {
-      flowGoals = [250, 500, 850, 1300];
-    } else {
-      const raw = [
-        round50(Math.max(250, bestDistance * .35)),
-        round50(Math.max(500, bestDistance * .65)),
-        round50(Math.max(750, bestDistance * .90)),
-        round50(bestDistance + Math.max(250, bestDistance * .10))
-      ];
-      flowGoals = raw.filter((value, i) => i === 0 || value > raw[i-1]);
-    }
+    // Course difficulty changed substantially, so legacy BEST distance should
+    // not push the first goal several kilometres away. Give every run useful
+    // intermediate wins, then widen the gaps naturally later.
+    flowGoals = [500, 1000, 1750, 2750, 4000];
     flowGoalIndex = 0;
     flowGoalStart = 0;
-    nextScoreGoal = flowGoals[0] || 250;
+    nextScoreGoal = flowGoals[0];
     flowRestPatterns = 0;
     bestApproachShown = false;
     recordChase = false;
@@ -1590,10 +1586,9 @@
       addPlatform(x + 30, groundY - 72, 170);
       for (let i=0; i<5; i++) addCoin(x + 48 + i*34, groundY - 112 - Math.sin(i/4*Math.PI)*24, 1);
       if (Math.random() < .36) addEquippedItem(x + 185, groundY - 128, ['shield','magnet','giant','slow','wing','roar']);
-      addChestnut(x + 315, groundY - 32, .80);
     } else {
       for (let i=0; i<6; i++) addCoin(x + 20 + i*36, groundY - 88 - Math.sin(i/5*Math.PI)*26, 1);
-      if (Math.random() < .32) addChestnut(x + 300, groundY - 31, .78);
+      if (Math.random() < .28 && !objects.some(o => o.type === 'letter')) addLetter(x + 220, groundY - 150);
     }
     flowRestPatterns = Math.max(0, flowRestPatterns - 1);
     nextPattern += 470 + Math.random() * 80;
