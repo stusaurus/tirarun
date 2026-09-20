@@ -179,7 +179,7 @@
     if (id === 'fever') return `FEVER +${level.toFixed(0)}秒`;
     if (id === 'chain') return `CHAIN CLEAR +${level*20}%`;
     if (id === 'coin') return `通常コイン +${level*15}%`;
-    if (id === 'items') return `アイテム出現 +${level*25}%`;
+    if (id === 'items') return `通常コースのアイテム出現 +${level*25}%`;
     if (id === 'rush') return `KURI RUSH報酬 +${level*25}%`;
     if (id === 'route') return `HIGH ROUTE報酬 +${level*25}%`;
     return '';
@@ -767,7 +767,7 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     groundY = H * 0.79;
     player.x = Math.max(72, W * 0.22);
-    if (state !== 'playing' && state !== 'paused') player.y = groundY - player.h;
+    if (state !== 'playing' && state !== 'paused' && state !== 'build') player.y = groundY - player.h;
   }
   addEventListener('resize', resize, {passive:true});
   resize();
@@ -1582,7 +1582,7 @@
       patternWidth = 565;
       customRewards = true;
     } else if (id === 23) {
-      // Combo rhythm: Tiranon's longer combo grace makes this lane easier to maximize.
+      // CHAIN rhythm: a clean three-beat clear is rewarded at section settlement.
       for (let beat=0; beat<3; beat++) {
         addChestnut(x + beat*350, groundY - 32, .78);
         addChestnut(x + beat*350 + 76, groundY - 36, .94);
