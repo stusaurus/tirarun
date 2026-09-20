@@ -161,13 +161,14 @@
   };
 
   const RUN_BUILD_CATALOG = {
-    score: {icon:'⭐', name:'ダッシュ強化', maxLevel:4},
-    fever: {icon:'🔥', name:'フィーバー延長', maxLevel:4},
-    chain: {icon:'🔗', name:'チェイン職人', maxLevel:4},
-    coin: {icon:'🪙', name:'コイン名人', maxLevel:4},
-    items: {icon:'🎁', name:'アイテム運', maxLevel:4},
-    rush: {icon:'🌰', name:'ラッシュハンター', maxLevel:4},
-    route: {icon:'🪽', name:'高みのごほうび', maxLevel:4}
+    score: {icon:'⭐', name:'ダッシュ強化', maxLevel:3},
+    fever: {icon:'🔥', name:'フィーバー強化', maxLevel:3},
+    chain: {icon:'🔗', name:'チェイン職人', maxLevel:3},
+    coin: {icon:'🪙', name:'コイン名人', maxLevel:3},
+    items: {icon:'🎁', name:'アイテムラッシュ', maxLevel:3},
+    rush: {icon:'🌰', name:'ラッシュハンター', maxLevel:3},
+    route: {icon:'🪽', name:'高みのごほうび', maxLevel:3},
+    guard: {icon:'🛡️', name:'セーフティ', maxLevel:3}
   };
 
   function createRunBuildState() {
@@ -175,13 +176,14 @@
   }
 
   function runBuildEffectText(id, level) {
-    if (id === 'score') return `走行SCORE +${level*10}%`;
-    if (id === 'fever') return `FEVER +${level.toFixed(0)}秒`;
-    if (id === 'chain') return `CHAIN CLEAR +${level*20}%`;
-    if (id === 'coin') return `通常コイン +${level*15}%`;
-    if (id === 'items') return `通常コースのアイテム出現 +${level*25}%`;
-    if (id === 'rush') return `KURI RUSH報酬 +${level*25}%`;
-    if (id === 'route') return `HIGH ROUTE報酬 +${level*25}%`;
+    if (id === 'score') return `走行SCORE +${level*20}%`;
+    if (id === 'fever') return `FEVER +${(level*2.5).toFixed(1)}秒`;
+    if (id === 'chain') return `CHAIN CLEAR +${level*40}%`;
+    if (id === 'coin') return `通常コイン +${level*30}%`;
+    if (id === 'items') return `通常コースのアイテム出現 +${level*50}%`;
+    if (id === 'rush') return `KURI RUSH報酬 +${level*50}%`;
+    if (id === 'route') return `HIGH ROUTE報酬 +${level*50}%`;
+    if (id === 'guard') return '栗ミスを1回防ぐ（取得ごと+1）';
     return '';
   }
 
@@ -337,7 +339,7 @@
   }
 
   function characterRunScoreMultiplier() {
-    let mult = 1 + runBuild.score * .10;
+    let mult = 1 + runBuild.score * .20;
     if (selectedCharacter === 'tiranon') mult *= 1 + tiranonScoreBonus(characterLevel('tiranon')) / 100;
     if (selectedCharacter === 'pteran' && player.glideActive) {
       mult *= 1 + pteranAirScoreBonus(characterLevel('pteran')) / 100;
@@ -473,7 +475,9 @@
   function runBuildSummaryText() {
     return Object.entries(runBuild)
       .filter(([, lv]) => lv > 0)
-      .map(([id, lv]) => `${RUN_BUILD_CATALOG[id].icon}${lv}`)
+      .map(([id, lv]) => id === 'guard'
+        ? `${RUN_BUILD_CATALOG[id].icon}${runBuildGuardCharges}`
+        : `${RUN_BUILD_CATALOG[id].icon}${lv}`)
       .join(' ');
   }
 
@@ -482,7 +486,7 @@
     const active = Object.entries(runBuild).filter(([, lv]) => lv > 0);
     buildHudEl.hidden = !active.length || !['playing','paused','build'].includes(state);
     if (buildHudEl.hidden) return;
-    buildHudEl.innerHTML = `<b>RUN BUILD</b><span>${active.map(([id,lv]) => `${RUN_BUILD_CATALOG[id].icon}${lv}`).join(' ')}</span>`;
+    buildHudEl.innerHTML = `<b>RUN BUILD</b><span>${active.map(([id,lv]) => id === 'guard' ? `${RUN_BUILD_CATALOG[id].icon}${runBuildGuardCharges}` : `${RUN_BUILD_CATALOG[id].icon}${lv}`).join(' ')}</span>`;
   }
 
   function pickRunBuildChoices() {
@@ -493,6 +497,18 @@
       [pool[i], pool[j]] = [pool[j], pool[i]];
     }
     return pool.slice(0, 3);
+  }
+
+  function queueRunBuildChoice(cleared, scoreBonus, coinBonus) {
+    pendingRunBuildCheckpoint = {cleared, scoreBonus, coinBonus};
+  }
+
+  function canOpenRunBuildChoice() {
+    if (state !== 'playing' || !pendingRunBuildCheckpoint || eventMode !== 'normal') return false;
+    if (player.jumps !== 0 || player.glideActive || player.diveActive || player.wing > 0) return false;
+    const dangerNear = objects.some(o => o.type === 'kuri' &&
+      o.x < player.x + Math.min(330, W*.62) && o.x + o.w > player.x - 70);
+    return !dangerNear;
   }
 
   function openRunBuildChoice(cleared, scoreBonus, coinBonus) {
@@ -518,19 +534,32 @@
     return true;
   }
 
+  function maybeOpenRunBuildChoice() {
+    if (!canOpenRunBuildChoice()) return false;
+    const data = pendingRunBuildCheckpoint;
+    pendingRunBuildCheckpoint = null;
+    return openRunBuildChoice(data.cleared, data.scoreBonus, data.coinBonus);
+  }
+
   function chooseRunBuild(id) {
     const perk = RUN_BUILD_CATALOG[id];
     if (state !== 'build' || !perk || !pendingRunBuildChoices.includes(id)) return;
     if (runBuild[id] >= perk.maxLevel) return;
     runBuild[id]++;
+    if (id === 'guard') runBuildGuardCharges++;
     pendingRunBuildChoices = [];
     runBuildPanelEl.hidden = true;
     state = 'playing';
     last = performance.now();
+    player.invincible = Math.max(player.invincible, 1.5);
+    flowRestPatterns = Math.max(flowRestPatterns, 2);
+    eventCooldown = Math.max(eventCooldown, 7);
+    nextPattern = Math.max(nextPattern, distance + W + 180);
     pauseBtn.hidden = false;
     updateBuildHud();
     popText(`${perk.icon} ${perk.name} Lv.${runBuild[id]}!`, W*.5, H*.31, '#eaffc9', .9, 18);
     burst(player.x + player.w/2, player.y + player.h/2, '#c9f49a', 14, 140);
+    popText('SAFE START! 1.5秒無敵', W*.5, H*.35, '#d9fbff', .8, 16);
     beep(900 + runBuild[id]*35, .08, 'sine', .026);
   }
 
@@ -579,7 +608,10 @@
     burst(player.x + player.w/2, player.y + player.h/2, '#ffd25d', 20, 165);
     beep(820, .08, 'sine', .03);
     setTimeout(() => beep(1040, .08, 'sine', .024), 70);
-    openRunBuildChoice(cleared, scoreBonus, coinBonus);
+    if (goalNo % 2 === 0) {
+      queueRunBuildChoice(cleared, scoreBonus, coinBonus);
+      popText('BUILD CHANCE! 安全地帯で選択', W*.5, H*.30, '#ddffc3', .9, 18);
+    }
   }
 
   function updateFlowGoals() {
@@ -663,6 +695,8 @@
   let runBuild = createRunBuildState();
   let runBuildCoinMeter = 0;
   let pendingRunBuildChoices = [];
+  let pendingRunBuildCheckpoint = null;
+  let runBuildGuardCharges = 0;
   const RUSH_WARP_DURATION = .95;
   const ROAR_FX_DURATION = .65;
 
@@ -826,6 +860,8 @@
     runBuild = createRunBuildState();
     runBuildCoinMeter = 0;
     pendingRunBuildChoices = [];
+    pendingRunBuildCheckpoint = null;
+    runBuildGuardCharges = 0;
     if (runBuildPanelEl) runBuildPanelEl.hidden = true;
     resetFlowGoals();
     Object.assign(player, {
@@ -1008,7 +1044,7 @@
     const base = chain >= 10 ? 500 : chain >= 6 ? 250 : chain >= 3 ? 120 : 0;
     if (base > 0) {
       const characterBonus = selectedCharacter === 'tiranon' ? tiranonChainBonusRate(characterLevel('tiranon')) : 0;
-      const buildBonus = runBuild.chain * .20;
+      const buildBonus = runBuild.chain * .40;
       const bonus = Math.round(base * (1 + characterBonus + buildBonus));
       scoreFloat += bonus;
       score = Math.floor(scoreFloat);
@@ -1644,12 +1680,12 @@
     }
 
     const specialItem = pickEquipped(['roar','slow','wing']);
-    if (specialItem && Math.random() < .052 * (1 + runBuild.items * .25)) {
+    if (specialItem && Math.random() < .052 * (1 + runBuild.items * .50)) {
       const ix = x + Math.min(patternWidth - 80, 95 + Math.random() * 150);
       addItem(ix, groundY - (112 + Math.random() * 55), specialItem);
     }
 
-    if (Math.random() < .088 * (1 + runBuild.items * .25)) {
+    if (Math.random() < .088 * (1 + runBuild.items * .50)) {
       const ix = x + Math.min(patternWidth - 80, 120 + Math.random() * 150);
       addEquippedItem(ix, groundY - (130 + Math.random() * 75), ['shield','magnet','giant']);
     }
@@ -1775,7 +1811,7 @@
         flowRestPatterns = Math.max(flowRestPatterns, ended === 'rush' ? 2 : 1);
         if (ended === 'rush') {
           const perfect = rushMistakes === 0;
-          const rushMult = 1 + runBuild.rush * .25;
+          const rushMult = 1 + runBuild.rush * .50;
           const rushScore = Math.round((perfect ? 1000 : 500) * rushMult);
           const rushCoins = Math.round((perfect ? 20 : 10) * rushMult);
           scoreFloat += rushScore;
@@ -1836,10 +1872,6 @@
     scoreFloat += (worldSp * dt / 18) * (player.fever > 0 ? 3 : 1) * characterRunScoreMultiplier();
     score = Math.floor(scoreFloat);
     updateFlowGoals();
-    if (state === 'build') {
-      updateHud();
-      return;
-    }
 
     const feverBefore = player.fever;
     const magnetBefore = player.magnet;
@@ -2107,6 +2139,19 @@
           setTimeout(() => beep(680, .07, 'sine', .025), 70);
           continue;
         }
+        if (runBuildGuardCharges > 0) {
+          runBuildGuardCharges--;
+          player.invincible = Math.max(player.invincible, 1.35);
+          flash = .10;
+          shake = 5;
+          burst(o.x + o.w/2, o.y + o.h/2, '#c9f4a8', 18, 165);
+          popText(`BUILD GUARD! 残り${runBuildGuardCharges}`, player.x + player.w*.55, player.y - 12, '#e8ffc8', .8, 17);
+          objects.splice(i, 1);
+          updateBuildHud();
+          beep(480, .08, 'square', .03);
+          setTimeout(() => beep(820, .07, 'sine', .022), 65);
+          continue;
+        }
         beginDamageGameOver();
         return;
       }
@@ -2124,6 +2169,11 @@
         const near = verticalGap(hurtbox, o) <= 22;
         registerAvoid(o, near);
       }
+    }
+
+    if (maybeOpenRunBuildChoice()) {
+      updateHud();
+      return;
     }
 
     if (distance + W > nextPattern) spawnPattern();
@@ -2158,7 +2208,7 @@
   function collectCoin(o) {
     const gain = Math.max(1, Number(o.value || 1));
     runCoins += gain;
-    runBuildCoinMeter += gain * runBuild.coin * .15;
+    runBuildCoinMeter += gain * runBuild.coin * .30;
     const buildCoinExtra = Math.floor(runBuildCoinMeter);
     if (buildCoinExtra > 0) {
       runBuildCoinMeter -= buildCoinExtra;
@@ -2190,7 +2240,7 @@
     beep(620 + collected * 45, .075, 'sine', .045);
     if (collected >= WORD.length) {
       collected = 0;
-      player.fever = 8 + runBuild.fever;
+      player.fever = 8 + runBuild.fever * 2.5;
       flash = .10;
       eventMode = 'normal';
       eventTimer = 0;
@@ -2280,7 +2330,7 @@
 
   function collectBonus(o) {
     const value = o.value || 1;
-    const routeMult = o.premium ? 1 + runBuild.route * .25 : 1;
+    const routeMult = o.premium ? 1 + runBuild.route * .50 : 1;
     const gain = Math.round(28 * value * Math.max(1, comboMultiplier()) * routeMult);
     scoreFloat += gain;
     score = Math.floor(scoreFloat);
