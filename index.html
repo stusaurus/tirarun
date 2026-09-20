@@ -10,7 +10,7 @@
   <meta name="apple-mobile-web-app-title" content="ティラクリ" />
   <link rel="apple-touch-icon" href="./1218B0FC-C2A9-4661-8707-C27D900A8992.png" />
   <title>ティラクリ | ワンタップラン</title>
-  <link rel="stylesheet" href="./style.css?v=20260919-goals1" />
+  <link rel="stylesheet" href="./style.css?v=20260920-build1" />
 </head>
 <body>
 <div id="wrap">
@@ -24,6 +24,7 @@
       <div id="distanceHud">📏 0m / BEST 0m</div>
       <div id="userHud">USER Lv.1　💎 0</div>
       <div id="goalHud">GOAL 1,500　あと 1,500</div>
+      <div id="buildHud" hidden></div>
     </div>
     <div id="rightHud">
       <div id="letters">T I R A K U R I</div>
@@ -33,6 +34,16 @@
   </div>
 
   <div id="characterEffectHud" hidden aria-live="polite"></div>
+
+  <div id="runBuildPanel" hidden>
+    <div class="runBuildCard">
+      <small id="runBuildGoal">🎯 RUN GOAL CLEAR!</small>
+      <strong>RUN BUILD</strong>
+      <p>このランだけの強化を1つえらぶ</p>
+      <div id="runBuildChoices"></div>
+      <div id="runBuildSummary"></div>
+    </div>
+  </div>
 
   <div id="itemBar">
     <div class="buff" id="shieldBuff">🛡 シールド</div>
@@ -74,7 +85,7 @@
       </div>
       <div id="tips">
         コインで好きなアイテムを解放・強化！<br>
-        累計スコアでUSER Lvが上がると💎がもらえるノン
+        RUN GOAL達成で3択強化！ 累計スコアでUSER Lvも上がるノン
       </div>
     </div>
     <div id="shopPanel" hidden>
@@ -95,9 +106,9 @@
     </div>
   </div>
 </div>
-<script src="./theme.js?v=20260919-goals1"></script>
-<script src="./visibility.js?v=20260919-goals1"></script>
-<script src="./contrast.js?v=20260919-goals1"></script>
-<script src="./game.js?v=20260919-goals1"></script>
+<script src="./theme.js?v=20260920-build1"></script>
+<script src="./visibility.js?v=20260920-build1"></script>
+<script src="./contrast.js?v=20260920-build1"></script>
+<script src="./game.js?v=20260920-build1"></script>
 </body>
 </html>
