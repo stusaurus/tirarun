@@ -508,18 +508,19 @@
   function updateBuildHud() {
     if (!buildHudEl) return;
     const active = Object.entries(runBuild).filter(([, lv]) => lv > 0);
-    buildHudEl.hidden = !['playing','paused','build'].includes(state);
-    if (buildHudEl.hidden) return;
     const live = [];
     if (buildBoostTimer > 0) live.push(`⚡${buildBoostTimer.toFixed(1)}s×${buildBoostHits}`);
-    if (buildGoldTimer > 0) live.push(`🪙GOLD ${buildGoldTimer.toFixed(1)}s`);
-    if (buildBreakerTimer > 0) live.push(`🌰BREAK ${buildBreakerTimer.toFixed(1)}s`);
+    if (buildGoldTimer > 0) live.push(`🪙${buildGoldTimer.toFixed(1)}s`);
+    if (buildBreakerTimer > 0) live.push(`🌰${buildBreakerTimer.toFixed(1)}s`);
     if (buildEchoShields > 0) live.push(`🔮×${buildEchoShields}`);
-    const ownedText = active.length ? active.map(([id,lv]) => `${RUN_BUILD_CATALOG[id].icon}${lv}`).join(' ') : '未取得';
-    const nextText = pendingRunBuildCheckpoint
-      ? `⚡ BUILD CHANCE待機中`
-      : `NEXT ${nextRunBuildAt.toLocaleString()}m`;
-    buildHudEl.innerHTML = `<b>RUN BUILD</b><span>${ownedText}<small>${live.length ? live.join('　') + '　' : ''}${nextText}</small></span>`;
+    const meters = Math.floor(distance / 18);
+    const untilNext = Math.max(0, nextRunBuildAt - meters);
+    const nearBuild = !!pendingRunBuildCheckpoint || untilNext <= 220;
+    buildHudEl.hidden = !['playing','paused','build'].includes(state) || (!active.length && !live.length && !nearBuild);
+    if (buildHudEl.hidden) return;
+    const ownedText = active.map(([id,lv]) => `${RUN_BUILD_CATALOG[id].icon}${lv}`).join(' ');
+    const nextText = pendingRunBuildCheckpoint ? '⚡ CHANCE!' : (nearBuild ? `あと${untilNext}m` : '');
+    buildHudEl.innerHTML = `<b>BUILD</b><span>${ownedText || '⚡'}${live.length ? ` <small>${live.join(' ')}</small>` : ''}${nextText ? ` <small>${nextText}</small>` : ''}</span>`;
   }
 
   function pickRunBuildChoices() {
@@ -541,11 +542,10 @@
   }
 
   function nextBuildMilestoneAfter(cleared, count) {
-    if (cleared < 500) return 500;
-    if (cleared < 1200) return 1200;
-    if (cleared < 2000) return 2000;
+    if (cleared < 1000) return 1000;
     if (cleared < 3000) return 3000;
-    const interval = Math.min(1500, 1200 + Math.floor(Math.max(0, count - 4) / 2) * 100);
+    if (cleared < 5500) return 5500;
+    const interval = Math.min(3000, 2200 + Math.floor(Math.max(0, count - 3) / 2) * 200);
     return cleared + interval;
   }
 
@@ -820,7 +820,7 @@
   let restartReadyAt = 0;
   let runBuild = createRunBuildState();
   let runBuildChoiceCount = 0;
-  let nextRunBuildAt = 500;
+  let nextRunBuildAt = 1000;
   let pendingRunBuildChoices = [];
   let pendingRunBuildCheckpoint = null;
   let buildBoostTimer = 0;
@@ -995,7 +995,7 @@
     restartReadyAt = 0;
     runBuild = createRunBuildState();
     runBuildChoiceCount = 0;
-    nextRunBuildAt = 500;
+    nextRunBuildAt = 1000;
     pendingRunBuildChoices = [];
     pendingRunBuildCheckpoint = null;
     buildBoostTimer = 0;
@@ -1533,9 +1533,10 @@
   }
 
   function normalPatternFamily(id) {
-    if ([1,5,8,11,21,23].includes(id)) return 'rhythm';
+    if ([1,5,8,11,23].includes(id)) return 'rhythm';
     if ([3,4,10,16,19,25].includes(id)) return 'steps';
     if ([9,17,20,22,27].includes(id)) return 'spring';
+    if ([18,21,26].includes(id)) return 'double';
     if ([0,6].includes(id)) return 'single';
     return 'route';
   }
@@ -1543,27 +1544,42 @@
   function pickNormalPattern(level) {
     const pools = [
       [0,1,2,3,4,5,6,7],
-      [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
-      [2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21],
-      [5,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27]
+      [2,3,4,6,7,8,9,10,11,12,13,14,15],
+      [8,9,10,11,12,13,14,15,16,17,18,19,20,21],
+      [12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27]
     ];
     let pool = pools[Math.max(0, Math.min(3, level))];
     if (distance < 900) pool = [0,1,7];
     else if (level > 0) {
-      // Fade new layouts in across 1,800 distance instead of changing half
-      // the selection pool on the first frame after a tier threshold.
+      // Fade new layouts in instead of snapping difficulty at the tier line.
       const threshold = [0,3500,8500,15000][level];
-      const chance = .20 + .80 * Math.min(1, (distance-threshold)/1800);
+      const chance = .28 + .72 * Math.min(1, (distance-threshold)/1500);
       if (Math.random() > chance) pool = pools[level-1];
     }
     let candidates = pool.filter(id => !recentNormalPatterns.includes(id));
     if (!candidates.length) candidates = pool.slice();
-    const previous = recentNormalPatterns[recentNormalPatterns.length-1];
-    const varied = candidates.filter(id => normalPatternFamily(id) !== normalPatternFamily(previous));
-    if (varied.length) candidates = varied;
+
+    // Do not serve the same kind of decision repeatedly. Prefer a family that
+    // differs from both of the last two patterns, then relax if the pool is small.
+    const recentFamilies = recentNormalPatterns.slice(-2).map(normalPatternFamily);
+    const stronglyVaried = candidates.filter(id => !recentFamilies.includes(normalPatternFamily(id)));
+    if (stronglyVaried.length >= 2) candidates = stronglyVaried;
+    else {
+      const previous = recentNormalPatterns[recentNormalPatterns.length-1];
+      const varied = candidates.filter(id => normalPatternFamily(id) !== normalPatternFamily(previous));
+      if (varied.length) candidates = varied;
+    }
+
+    // Once the run is mature, slightly favor the patterns that demand a second
+    // input or a route decision instead of returning to easy ground-only beats.
+    if (level >= 2) {
+      const demanding = candidates.filter(id => ['double','steps','spring'].includes(normalPatternFamily(id)));
+      if (demanding.length && Math.random() < (level === 3 ? .58 : .42)) candidates = demanding;
+    }
+
     const id = candidates[Math.floor(Math.random() * candidates.length)];
     recentNormalPatterns.push(id);
-    if (recentNormalPatterns.length > 3) recentNormalPatterns.shift();
+    if (recentNormalPatterns.length > 4) recentNormalPatterns.shift();
     return id;
   }
 
@@ -1728,13 +1744,11 @@
       patternWidth = 510;
       customRewards = true;
     } else if (id === 18) {
-      addChestnut(x, groundY - 34, .88);
-      addPlatform(x + 95, groundY - 92, 120);
-      addChestnut(x + 132, groundY - 126, .78);
-      addChestnut(x + 278, groundY - 34, .92);
-      addPlatform(x + 370, groundY - 120, 130);
-      addBonus(x + 415, groundY - 158, 2, true);
-      patternWidth = 555;
+      // DOUBLE JUMP GATE: one normal jump cannot comfortably clear the whole cluster.
+      for (let i=0; i<4; i++) addChestnut(x + i*108, groundY - 34 - (i%2)*3, .84 + (i%2)*.06);
+      addCoinArc(x + 18, groundY - 126, 9, 45, 62);
+      addBonus(x + 388, groundY - 205, 2, true);
+      patternWidth = 500;
       customRewards = true;
     } else if (id === 19) {
       addPlatform(x, groundY - 172, 105);
@@ -1756,14 +1770,15 @@
       patternWidth = 610;
       customRewards = true;
     } else if (id === 21) {
-      // Tight rhythm feels especially forgiving with Mininon's smaller body, but jumping remains a safe answer.
-      addChestnut(x, groundY - 32, .78);
-      addChestnut(x + 102, groundY - 32, .78);
-      addChestnut(x + 225, groundY - 34, .84);
-      addCoin(x + 56, groundY - 62);
-      addCoin(x + 164, groundY - 66);
-      addCoinArc(x + 250, groundY - 105, 4, 34, 24);
-      patternWidth = 415;
+      // LOW / HIGH decision: stay low through a dense rhythm or double-jump to the safer upper line.
+      addChestnut(x + 55, groundY - 33, .84);
+      addChestnut(x + 165, groundY - 36, .96);
+      addChestnut(x + 285, groundY - 33, .84);
+      addPlatform(x + 85, groundY - 122, 135);
+      addPlatform(x + 246, groundY - 188, 155);
+      addCoinArc(x + 102, groundY - 160, 6, 51, 38);
+      addBonus(x + 318, groundY - 225, 2, true);
+      patternWidth = 485;
       customRewards = true;
 
     // 22-27: late-run mastery. Each has a safe read plus a richer specialist route.
@@ -1785,13 +1800,15 @@
       patternWidth = 910;
       customRewards = true;
     } else if (id === 24) {
-      addPlatform(x, groundY - 62, 110);
-      addChestnut(x + 145, groundY - 34, .90);
-      addPlatform(x + 235, groundY - 142, 125);
-      addChestnut(x + 395, groundY - 34, .96);
-      addPlatform(x + 485, groundY - 82, 120);
-      addBonus(x + 520, groundY - 120, 2, true);
-      patternWidth = 650;
+      // Stair climb then a controlled drop: the input rhythm is up-up, wait, jump.
+      addPlatform(x, groundY - 66, 104);
+      addPlatform(x + 122, groundY - 126, 104);
+      addPlatform(x + 244, groundY - 188, 116);
+      addChestnut(x + 386, groundY - 34, .96);
+      addChestnut(x + 505, groundY - 34, .86);
+      addCoinArc(x + 16, groundY - 108, 7, 50, 78);
+      addBonus(x + 292, groundY - 226, 2, true);
+      patternWidth = 625;
       customRewards = true;
     } else if (id === 25) {
       addPlatform(x, groundY - 175, 120);
@@ -1801,14 +1818,13 @@
       patternWidth = 680;
       customRewards = true;
     } else if (id === 26) {
-      addChestnut(x, groundY - 34, .85);
-      addPlatform(x + 105, groundY - 112, 125);
-      addBonus(x + 145, groundY - 150, 2, true);
-      addChestnut(x + 260, groundY - 36, 1.0);
-      addPlatform(x + 355, groundY - 165, 150);
-      addBonusArc(x + 374, groundY - 205, 3, 46, 18, true);
-      addChestnut(x + 550, groundY - 33, .86);
-      patternWidth = 670;
+      // DOUBLE PULSE: two compact gates with a real landing window between them.
+      for (let i=0; i<3; i++) addChestnut(x + i*100, groundY - 34 - (i===1?5:0), .86 + (i===1?.08:0));
+      addCoinArc(x + 12, groundY - 122, 7, 42, 52);
+      for (let i=0; i<3; i++) addChestnut(x + 455 + i*100, groundY - 34 - (i===1?5:0), .86 + (i===1?.08:0));
+      addCoinArc(x + 467, groundY - 122, 7, 42, 52);
+      addBonus(x + 370, groundY - 98, 2, true);
+      patternWidth = 790;
       customRewards = true;
     } else {
       addSpring(x, groundY - 12, 54, true);
@@ -1887,23 +1903,39 @@
 
   function spawnRushPattern() {
     const x = W + 95;
-    const kind = Math.floor(Math.random() * 4);
+    const kind = Math.floor(Math.random() * 6);
     if (kind === 0) {
-      addChestnut(x, groundY - 33, .86);
-      addChestnut(x + 165, groundY - 36, .98);
+      addChestnut(x, groundY - 33, .84);
+      addChestnut(x + 108, groundY - 36, .94);
+      addChestnut(x + 230, groundY - 33, .86);
+      addChestnut(x + 350, groundY - 38, 1.0);
     } else if (kind === 1) {
-      addChestnut(x, groundY - 33, .84);
-      addChestnut(x + 150, groundY - 42, 1.04);
-      addChestnut(x + 305, groundY - 33, .88);
+      // Long cluster: commit to the second jump instead of bunny-hopping singles.
+      for (let i=0; i<4; i++) addChestnut(x + i*102, groundY - 33 - (i%2)*4, .84 + (i%2)*.08);
     } else if (kind === 2) {
-      addPlatform(x + 55, groundY - 82, 160);
+      addPlatform(x + 54, groundY - 88, 165);
       addChestnut(x, groundY - 33, .84);
-      addChestnut(x + 285, groundY - 34, .94);
+      addChestnut(x + 122, groundY - 122, .78);
+      addChestnut(x + 292, groundY - 34, .94);
+      addChestnut(x + 410, groundY - 34, .84);
+    } else if (kind === 3) {
+      addChestnut(x + 20, groundY - 34, .88);
+      addChestnut(x + 145, groundY - 50, 1.08);
+      addChestnut(x + 280, groundY - 34, .88);
+      addChestnut(x + 405, groundY - 46, 1.02);
+    } else if (kind === 4) {
+      addPlatform(x + 30, groundY - 64, 105);
+      addPlatform(x + 158, groundY - 126, 110);
+      addChestnut(x + 295, groundY - 34, .92);
+      addChestnut(x + 405, groundY - 34, .86);
     } else {
-      addChestnut(x + 45, groundY - 34, .90);
-      addChestnut(x + 220, groundY - 52, 1.12);
+      addChestnut(x, groundY - 33, .82);
+      addChestnut(x + 92, groundY - 33, .82);
+      addChestnut(x + 270, groundY - 36, .98);
+      addChestnut(x + 372, groundY - 33, .84);
+      addChestnut(x + 474, groundY - 36, .96);
     }
-    nextPattern += 430 + Math.random() * 90;
+    nextPattern += 500 + Math.random() * 75;
   }
 
   function spawnBonusPattern() {
@@ -1934,7 +1966,7 @@
     chainSectionPatterns = 0;
     objects = objects.filter(o => o.type !== 'chainEnd');
     eventMode = type;
-    eventTimer = type === 'rush' ? 7.45 : 8.5;
+    eventTimer = type === 'rush' ? 8.15 : 8.5;
     eventBanner = type === 'rush' ? '🌰 KURI RUSH!' : '⭐ BONUS RUN!';
     eventBannerTimer = 1.8;
     if (type === 'rush') {
