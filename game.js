@@ -45,6 +45,11 @@
   const characterGemsEl = document.getElementById('characterGems');
   const characterNoteEl = document.getElementById('characterNote');
   const characterEffectHudEl = document.getElementById('characterEffectHud');
+  const buildHudEl = document.getElementById('buildHud');
+  const runBuildPanelEl = document.getElementById('runBuildPanel');
+  const runBuildGoalEl = document.getElementById('runBuildGoal');
+  const runBuildChoicesEl = document.getElementById('runBuildChoices');
+  const runBuildSummaryEl = document.getElementById('runBuildSummary');
 
   const WORD = 'TIRAKURI';
   const LS_BEST = 'tirakuri-best-v2';
@@ -154,6 +159,31 @@
       trait:'滑空', traitDesc:'長押しで滑空、離すと急降下。急降下中に再長押しでふわっと再浮上。Lv5・10で操作性能UP。'
     }
   };
+
+  const RUN_BUILD_CATALOG = {
+    score: {icon:'⭐', name:'ダッシュ強化', maxLevel:4},
+    fever: {icon:'🔥', name:'フィーバー延長', maxLevel:4},
+    chain: {icon:'🔗', name:'チェイン職人', maxLevel:4},
+    coin: {icon:'🪙', name:'コイン名人', maxLevel:4},
+    items: {icon:'🎁', name:'アイテム運', maxLevel:4},
+    rush: {icon:'🌰', name:'ラッシュハンター', maxLevel:4},
+    route: {icon:'🪽', name:'高みのごほうび', maxLevel:4}
+  };
+
+  function createRunBuildState() {
+    return Object.fromEntries(Object.keys(RUN_BUILD_CATALOG).map(id => [id, 0]));
+  }
+
+  function runBuildEffectText(id, level) {
+    if (id === 'score') return `走行SCORE +${level*10}%`;
+    if (id === 'fever') return `FEVER +${level.toFixed(0)}秒`;
+    if (id === 'chain') return `CHAIN CLEAR +${level*20}%`;
+    if (id === 'coin') return `通常コイン +${level*15}%`;
+    if (id === 'items') return `アイテム出現 +${level*25}%`;
+    if (id === 'rush') return `KURI RUSH報酬 +${level*25}%`;
+    if (id === 'route') return `HIGH ROUTE報酬 +${level*25}%`;
+    return '';
+  }
 
   owned = Object.assign({shield:true, magnet:true, giant:true, roar:false, slow:false, wing:false}, owned || {});
   owned.shield = owned.magnet = owned.giant = true;
@@ -307,11 +337,12 @@
   }
 
   function characterRunScoreMultiplier() {
-    if (selectedCharacter === 'tiranon') return 1 + tiranonScoreBonus(characterLevel('tiranon')) / 100;
+    let mult = 1 + runBuild.score * .10;
+    if (selectedCharacter === 'tiranon') mult *= 1 + tiranonScoreBonus(characterLevel('tiranon')) / 100;
     if (selectedCharacter === 'pteran' && player.glideActive) {
-      return 1 + pteranAirScoreBonus(characterLevel('pteran')) / 100;
+      mult *= 1 + pteranAirScoreBonus(characterLevel('pteran')) / 100;
     }
-    return 1;
+    return mult;
   }
 
   function updateCharacterEffectHud() {
@@ -439,6 +470,70 @@
     return unique.length ? unique : [roundFlowGoal(Math.max(1500, startBest + 1))];
   }
 
+  function runBuildSummaryText() {
+    return Object.entries(runBuild)
+      .filter(([, lv]) => lv > 0)
+      .map(([id, lv]) => `${RUN_BUILD_CATALOG[id].icon}${lv}`)
+      .join(' ');
+  }
+
+  function updateBuildHud() {
+    if (!buildHudEl) return;
+    const active = Object.entries(runBuild).filter(([, lv]) => lv > 0);
+    buildHudEl.hidden = !active.length || !['playing','paused','build'].includes(state);
+    if (buildHudEl.hidden) return;
+    buildHudEl.innerHTML = `<b>RUN BUILD</b><span>${active.map(([id,lv]) => `${RUN_BUILD_CATALOG[id].icon}${lv}`).join(' ')}</span>`;
+  }
+
+  function pickRunBuildChoices() {
+    const pool = Object.keys(RUN_BUILD_CATALOG)
+      .filter(id => runBuild[id] < RUN_BUILD_CATALOG[id].maxLevel);
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    return pool.slice(0, 3);
+  }
+
+  function openRunBuildChoice(cleared, scoreBonus, coinBonus) {
+    pendingRunBuildChoices = pickRunBuildChoices();
+    if (!pendingRunBuildChoices.length || !runBuildPanelEl || !runBuildChoicesEl) return false;
+    state = 'build';
+    player.glideHeld = false;
+    player.glideActive = false;
+    player.diveActive = false;
+    pauseBtn.hidden = true;
+    runBuildPanelEl.hidden = false;
+    if (runBuildGoalEl) runBuildGoalEl.textContent = `🎯 ${cleared.toLocaleString()}m CLEAR　+SCORE ${scoreBonus} / 🪙+${coinBonus}`;
+    runBuildChoicesEl.innerHTML = pendingRunBuildChoices.map(id => {
+      const perk = RUN_BUILD_CATALOG[id];
+      const next = runBuild[id] + 1;
+      return `<button class="runBuildChoice" data-build-id="${id}"><span class="runBuildIcon">${perk.icon}</span><strong>${perk.name}</strong><small>Lv.${next}</small><em>${runBuildEffectText(id, next)}</em></button>`;
+    }).join('');
+    if (runBuildSummaryEl) {
+      const summary = runBuildSummaryText();
+      runBuildSummaryEl.textContent = summary ? `現在のBUILD　${summary}` : 'このランだけ有効。ゲームオーバーでリセット。';
+    }
+    updateHud();
+    return true;
+  }
+
+  function chooseRunBuild(id) {
+    const perk = RUN_BUILD_CATALOG[id];
+    if (state !== 'build' || !perk || !pendingRunBuildChoices.includes(id)) return;
+    if (runBuild[id] >= perk.maxLevel) return;
+    runBuild[id]++;
+    pendingRunBuildChoices = [];
+    runBuildPanelEl.hidden = true;
+    state = 'playing';
+    last = performance.now();
+    pauseBtn.hidden = false;
+    updateBuildHud();
+    popText(`${perk.icon} ${perk.name} Lv.${runBuild[id]}!`, W*.5, H*.31, '#eaffc9', .9, 18);
+    burst(player.x + player.w/2, player.y + player.h/2, '#c9f49a', 14, 140);
+    beep(900 + runBuild[id]*35, .08, 'sine', .026);
+  }
+
   function resetFlowGoals() {
     runBestAtStart = best;
     const round50 = value => Math.max(50, Math.round(value / 50) * 50);
@@ -484,6 +579,7 @@
     burst(player.x + player.w/2, player.y + player.h/2, '#ffd25d', 20, 165);
     beep(820, .08, 'sine', .03);
     setTimeout(() => beep(1040, .08, 'sine', .024), 70);
+    openRunBuildChoice(cleared, scoreBonus, coinBonus);
   }
 
   function updateFlowGoals() {
@@ -564,6 +660,9 @@
   let chainClears = 0;
   let rushMistakes = 0;
   let restartReadyAt = 0;
+  let runBuild = createRunBuildState();
+  let runBuildCoinMeter = 0;
+  let pendingRunBuildChoices = [];
   const RUSH_WARP_DURATION = .95;
   const ROAR_FX_DURATION = .65;
 
@@ -724,6 +823,10 @@
     chainClears = 0;
     rushMistakes = 0;
     restartReadyAt = 0;
+    runBuild = createRunBuildState();
+    runBuildCoinMeter = 0;
+    pendingRunBuildChoices = [];
+    if (runBuildPanelEl) runBuildPanelEl.hidden = true;
     resetFlowGoals();
     Object.assign(player, {
       y: groundY - 48, w:48, h:48, vy:0, jumps:0,
@@ -766,6 +869,7 @@
     document.body.classList.remove('in-run');
     pausePanel.hidden = true;
     pauseBtn.hidden = true;
+    if (runBuildPanelEl) runBuildPanelEl.hidden = true;
     shake = 0;
     const oldUserLevel = userLevel;
     const unlockedBefore = new Set(Object.entries(CHARACTER_CATALOG).filter(([, ch]) => oldUserLevel >= ch.unlockLevel && !ch.coming).map(([id]) => id));
@@ -801,6 +905,10 @@
       : '';
     const distanceLine = `<br><span style="font-size:15px;color:#4d7180">📏 DISTANCE ${runMeters.toLocaleString()}m　BEST ${bestDistance.toLocaleString()}m</span>`;
     const coinLine = `<br><span style="font-size:15px;color:#9a7119">🪙 +${earnedCoins}　所持 ${wallet}</span>`;
+    const buildSummary = runBuildSummaryText();
+    const buildLine = buildSummary
+      ? `<br><span style="font-size:12px;color:#51785f">RUN BUILD　${buildSummary}</span>`
+      : '';
     const nextRemain = Math.max(0, nextScoreGoal - runMeters);
     const nextLine = `<br><span style="font-size:13px;color:#7b6845">🎯 RUN GOAL ${nextScoreGoal.toLocaleString()}m　あと${nextRemain.toLocaleString()}m</span>`;
     const levelLine = earnedGems > 0
@@ -809,7 +917,7 @@
     const charUnlockLine = newlyUnlockedCharacters.length
       ? `<br><span style="font-size:14px;color:#3d8a78">NEW! ${newlyUnlockedCharacters.join('・')}が使用可能！</span>`
       : '';
-    resultEl.innerHTML = `SCORE ${score}<br><span style="font-size:15px;color:#6a7c75">BEST SCORE ${best}</span>${distanceLine}${comboLine}${coinLine}${nextLine}${levelLine}${charUnlockLine}`;
+    resultEl.innerHTML = `SCORE ${score}<br><span style="font-size:15px;color:#6a7c75">BEST SCORE ${best}</span>${distanceLine}${comboLine}${coinLine}${buildLine}${nextLine}${levelLine}${charUnlockLine}`;
     subtitleEl.textContent = newlyUnlockedCharacters.length ? '新しい仲間が増えたノン！' : earnedGems > 0 ? 'ユーザーレベルが上がったノン！' : newBest ? 'ベストスコアだノン！' : 'もう1回いくノン？';
     startBtn.textContent = 'もう一度あそぶ';
     restartReadyAt = performance.now() + 700;
@@ -899,8 +1007,9 @@
     comboPeak = Math.max(comboPeak, chain);
     const base = chain >= 10 ? 500 : chain >= 6 ? 250 : chain >= 3 ? 120 : 0;
     if (base > 0) {
-      const bonusRate = selectedCharacter === 'tiranon' ? tiranonChainBonusRate(characterLevel('tiranon')) : 0;
-      const bonus = Math.round(base * (1 + bonusRate));
+      const characterBonus = selectedCharacter === 'tiranon' ? tiranonChainBonusRate(characterLevel('tiranon')) : 0;
+      const buildBonus = runBuild.chain * .20;
+      const bonus = Math.round(base * (1 + characterBonus + buildBonus));
       scoreFloat += bonus;
       score = Math.floor(scoreFloat);
       chainClears++;
@@ -1040,6 +1149,13 @@
   resumeBtn.addEventListener('pointerdown', e => e.stopPropagation());
   resumeBtn.addEventListener('click', e => { e.stopPropagation(); resumeGame(); });
   pausePanel.addEventListener('pointerdown', e => e.stopPropagation());
+  if (runBuildPanelEl) runBuildPanelEl.addEventListener('pointerdown', e => e.stopPropagation());
+  if (runBuildChoicesEl) runBuildChoicesEl.addEventListener('click', e => {
+    const btn = e.target.closest('button[data-build-id]');
+    if (!btn) return;
+    e.stopPropagation();
+    chooseRunBuild(btn.dataset.buildId);
+  });
   overlay.addEventListener('pointerdown', e => {
     if (e.target.closest && e.target.closest('#shopPanel,#characterPanel,#shopBtn,#characterBtn,#startBtn,#mute')) return;
     input(e);
@@ -1528,12 +1644,12 @@
     }
 
     const specialItem = pickEquipped(['roar','slow','wing']);
-    if (specialItem && Math.random() < .052) {
+    if (specialItem && Math.random() < .052 * (1 + runBuild.items * .25)) {
       const ix = x + Math.min(patternWidth - 80, 95 + Math.random() * 150);
       addItem(ix, groundY - (112 + Math.random() * 55), specialItem);
     }
 
-    if (Math.random() < .088) {
+    if (Math.random() < .088 * (1 + runBuild.items * .25)) {
       const ix = x + Math.min(patternWidth - 80, 120 + Math.random() * 150);
       addEquippedItem(ix, groundY - (130 + Math.random() * 75), ['shield','magnet','giant']);
     }
@@ -1659,8 +1775,9 @@
         flowRestPatterns = Math.max(flowRestPatterns, ended === 'rush' ? 2 : 1);
         if (ended === 'rush') {
           const perfect = rushMistakes === 0;
-          const rushScore = perfect ? 1000 : 500;
-          const rushCoins = perfect ? 20 : 10;
+          const rushMult = 1 + runBuild.rush * .25;
+          const rushScore = Math.round((perfect ? 1000 : 500) * rushMult);
+          const rushCoins = Math.round((perfect ? 20 : 10) * rushMult);
           scoreFloat += rushScore;
           score = Math.floor(scoreFloat);
           runCoins += rushCoins;
@@ -1719,6 +1836,10 @@
     scoreFloat += (worldSp * dt / 18) * (player.fever > 0 ? 3 : 1) * characterRunScoreMultiplier();
     score = Math.floor(scoreFloat);
     updateFlowGoals();
+    if (state === 'build') {
+      updateHud();
+      return;
+    }
 
     const feverBefore = player.fever;
     const magnetBefore = player.magnet;
@@ -2037,6 +2158,12 @@
   function collectCoin(o) {
     const gain = Math.max(1, Number(o.value || 1));
     runCoins += gain;
+    runBuildCoinMeter += gain * runBuild.coin * .15;
+    const buildCoinExtra = Math.floor(runBuildCoinMeter);
+    if (buildCoinExtra > 0) {
+      runBuildCoinMeter -= buildCoinExtra;
+      runCoins += buildCoinExtra;
+    }
     let mininonExtra = 0;
     if (selectedCharacter === 'mininon') {
       const lv = characterLevel('mininon');
@@ -2050,7 +2177,7 @@
     }
     scoreFloat += 5 * gain;
     score = Math.floor(scoreFloat);
-    burst(o.x + o.w/2, o.y + o.h/2, '#ffd34e', mininonExtra ? 10 : 7, mininonExtra ? 120 : 90);
+    burst(o.x + o.w/2, o.y + o.h/2, '#ffd34e', (mininonExtra || buildCoinExtra) ? 10 : 7, (mininonExtra || buildCoinExtra) ? 120 : 90);
     beep(760 + Math.min(5, runCoins % 6) * 28, .028, 'sine', .014);
   }
 
@@ -2063,7 +2190,7 @@
     beep(620 + collected * 45, .075, 'sine', .045);
     if (collected >= WORD.length) {
       collected = 0;
-      player.fever = 8;
+      player.fever = 8 + runBuild.fever;
       flash = .10;
       eventMode = 'normal';
       eventTimer = 0;
@@ -2153,7 +2280,8 @@
 
   function collectBonus(o) {
     const value = o.value || 1;
-    const gain = 28 * value * Math.max(1, comboMultiplier());
+    const routeMult = o.premium ? 1 + runBuild.route * .25 : 1;
+    const gain = Math.round(28 * value * Math.max(1, comboMultiplier()) * routeMult);
     scoreFloat += gain;
     score = Math.floor(scoreFloat);
     burst(o.x + o.w/2, o.y + o.h/2, o.premium ? '#ffd04b' : '#ffe36d', o.premium ? 11 : 8, 110);
@@ -2195,6 +2323,7 @@
     timeBuff.style.display = player.timeSlow > 0 ? 'block' : 'none';
     wingBuff.style.display = player.wing > 0 ? 'block' : 'none';
     updateCharacterEffectHud();
+    updateBuildHud();
   }
 
   function burst(x, y, color, n=8, power=120) {
