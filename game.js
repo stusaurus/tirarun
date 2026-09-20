@@ -161,14 +161,13 @@
   };
 
   const RUN_BUILD_CATALOG = {
-    score: {icon:'⭐', name:'ダッシュ強化', maxLevel:3},
-    fever: {icon:'🔥', name:'フィーバー強化', maxLevel:3},
-    chain: {icon:'🔗', name:'チェイン職人', maxLevel:3},
-    coin: {icon:'🪙', name:'コイン名人', maxLevel:3},
-    items: {icon:'🎁', name:'アイテムラッシュ', maxLevel:3},
-    rush: {icon:'🌰', name:'ラッシュハンター', maxLevel:3},
-    route: {icon:'🪽', name:'高みのごほうび', maxLevel:3},
-    guard: {icon:'🛡️', name:'セーフティ', maxLevel:3}
+    airStep: {icon:'☁️', name:'エアステップ', maxLevel:3},
+    stomp: {icon:'💥', name:'着地スマッシュ', maxLevel:3},
+    nearBoost: {icon:'⚡', name:'ギリギリブースト', maxLevel:3},
+    feverShot: {icon:'🔥', name:'FEVERファイア', maxLevel:3},
+    coinStorm: {icon:'🪙', name:'ゴールドモード', maxLevel:3},
+    rushBreaker: {icon:'🌰', name:'RUSH BREAKER', maxLevel:3},
+    echo: {icon:'🔮', name:'TIRAKURIエコー', maxLevel:3}
   };
 
   function createRunBuildState() {
@@ -176,14 +175,41 @@
   }
 
   function runBuildEffectText(id, level) {
-    if (id === 'score') return `走行SCORE +${level*20}%`;
-    if (id === 'fever') return `FEVER +${(level*2.5).toFixed(1)}秒`;
-    if (id === 'chain') return `CHAIN CLEAR +${level*40}%`;
-    if (id === 'coin') return `通常コイン +${level*30}%`;
-    if (id === 'items') return `通常コースのアイテム出現 +${level*50}%`;
-    if (id === 'rush') return `KURI RUSH報酬 +${level*50}%`;
-    if (id === 'route') return `HIGH ROUTE報酬 +${level*50}%`;
-    if (id === 'guard') return '栗ミスを1回防ぐ（取得ごと+1）';
+    if (id === 'airStep') {
+      if (level === 1) return '2段ジャンプ後に、空中でもう1回だけ小ジャンプ';
+      if (level === 2) return 'エアステップ時、前方の栗を1個吹き飛ばす';
+      return '吹き飛ばした栗がコインになる';
+    }
+    if (id === 'stomp') {
+      if (level === 1) return '高い所から着地すると、前方の栗を粉砕';
+      if (level === 2) return 'スマッシュ範囲UP＋最大2個粉砕';
+      return '粉砕した栗からコインが出る';
+    }
+    if (id === 'nearBoost') {
+      if (level === 1) return 'ギリギリ回避でBOOST。次の栗を1個粉砕';
+      if (level === 2) return 'BOOST延長＋2個まで粉砕';
+      return 'BOOST破壊でコイン獲得';
+    }
+    if (id === 'feverShot') {
+      if (level === 1) return 'FEVER中のジャンプで火球。前方の栗を破壊';
+      if (level === 2) return '火球が栗を2個まで貫通';
+      return '火球で壊した栗がコインになる';
+    }
+    if (id === 'coinStorm') {
+      if (level === 1) return 'コイン8枚でGOLD MODE。栗をコイン化';
+      if (level === 2) return 'コイン6枚で発動＋効果時間UP';
+      return 'コイン5枚で発動＋栗の換金量UP';
+    }
+    if (id === 'rushBreaker') {
+      if (level === 1) return 'KURI RUSHクリア後4秒、体当たりで栗を破壊';
+      if (level === 2) return 'RUSH BREAKERが6秒に延長';
+      return '8秒に延長＋破壊した栗がコインになる';
+    }
+    if (id === 'echo') {
+      if (level === 1) return 'TIRAKURI文字3個でECHOシールドを1回生成';
+      if (level === 2) return '文字2個でECHOシールドを生成';
+      return 'ECHOシールドを最大2回までストック';
+    }
     return '';
   }
 
@@ -339,7 +365,7 @@
   }
 
   function characterRunScoreMultiplier() {
-    let mult = 1 + runBuild.score * .20;
+    let mult = 1;
     if (selectedCharacter === 'tiranon') mult *= 1 + tiranonScoreBonus(characterLevel('tiranon')) / 100;
     if (selectedCharacter === 'pteran' && player.glideActive) {
       mult *= 1 + pteranAirScoreBonus(characterLevel('pteran')) / 100;
@@ -475,9 +501,7 @@
   function runBuildSummaryText() {
     return Object.entries(runBuild)
       .filter(([, lv]) => lv > 0)
-      .map(([id, lv]) => id === 'guard'
-        ? `${RUN_BUILD_CATALOG[id].icon}${runBuildGuardCharges}`
-        : `${RUN_BUILD_CATALOG[id].icon}${lv}`)
+      .map(([id, lv]) => `${RUN_BUILD_CATALOG[id].icon}${lv}`)
       .join(' ');
   }
 
@@ -486,7 +510,12 @@
     const active = Object.entries(runBuild).filter(([, lv]) => lv > 0);
     buildHudEl.hidden = !active.length || !['playing','paused','build'].includes(state);
     if (buildHudEl.hidden) return;
-    buildHudEl.innerHTML = `<b>RUN BUILD</b><span>${active.map(([id,lv]) => id === 'guard' ? `${RUN_BUILD_CATALOG[id].icon}${runBuildGuardCharges}` : `${RUN_BUILD_CATALOG[id].icon}${lv}`).join(' ')}</span>`;
+    const live = [];
+    if (buildBoostTimer > 0) live.push(`⚡${buildBoostTimer.toFixed(1)}s×${buildBoostHits}`);
+    if (buildGoldTimer > 0) live.push(`🪙GOLD ${buildGoldTimer.toFixed(1)}s`);
+    if (buildBreakerTimer > 0) live.push(`🌰BREAK ${buildBreakerTimer.toFixed(1)}s`);
+    if (buildEchoShields > 0) live.push(`🔮×${buildEchoShields}`);
+    buildHudEl.innerHTML = `<b>RUN BUILD</b><span>${active.map(([id,lv]) => `${RUN_BUILD_CATALOG[id].icon}${lv}`).join(' ')}${live.length ? `<small>${live.join('　')}</small>` : ''}</span>`;
   }
 
   function pickRunBuildChoices() {
@@ -541,12 +570,86 @@
     return openRunBuildChoice(data.cleared, data.scoreBonus, data.coinBonus);
   }
 
+  function buildSmashAhead(label, count, range, color, coinEach=0) {
+    const targets = objects
+      .filter(o => o.type === 'kuri' && o.x + o.w > player.x + player.w*.25 && o.x < player.x + range)
+      .sort((a,b) => a.x - b.x)
+      .slice(0, count);
+    if (!targets.length) return 0;
+    for (const target of targets) {
+      target.type = 'cleared';
+      burst(target.x + target.w/2, target.y + target.h/2, color, 14, 185);
+    }
+    const gain = targets.length * 35;
+    scoreFloat += gain;
+    score = Math.floor(scoreFloat);
+    if (coinEach > 0) runCoins += targets.length * coinEach;
+    popText(`${label} 栗×${targets.length}${coinEach ? ` 🪙+${targets.length*coinEach}` : ''}`, player.x + player.w*.65, player.y - 14, color, .72, 16);
+    beep(260 + targets.length*70, .065, 'square', .025);
+    return targets.length;
+  }
+
+  function triggerLandingSmash(landingSpeed) {
+    const lv = runBuild.stomp || 0;
+    if (!lv || landingSpeed < 500) return;
+    const range = lv === 1 ? 155 : lv === 2 ? 235 : 315;
+    const count = lv === 1 ? 1 : lv === 2 ? 2 : 3;
+    const hit = buildSmashAhead('💥 SMASH!', count, range, '#ffd07a', lv >= 3 ? 2 : 0);
+    if (hit) {
+      buildImpactFx = .32;
+      shake = Math.max(shake, 4 + lv);
+      burst(player.x + player.w*.5, player.y + player.h, '#ffe2a2', 18, 175);
+    }
+  }
+
+  function activateNearBoost() {
+    const lv = runBuild.nearBoost || 0;
+    if (!lv) return;
+    buildBoostTimer = lv === 1 ? 2.5 : lv === 2 ? 4 : 5.5;
+    buildBoostHits = Math.max(buildBoostHits, lv === 1 ? 1 : lv === 2 ? 2 : 3);
+    popText('⚡ GIRI BOOST!', player.x + player.w*.65, player.y - 18, '#fff09a', .75, 17);
+    burst(player.x + player.w*.55, player.y + player.h*.45, '#fff09a', 12, 145);
+  }
+
+  function fireFeverShot() {
+    const lv = runBuild.feverShot || 0;
+    if (!lv || player.fever <= 0) return;
+    buildFireFx = .22;
+    buildSmashAhead('🔥 FIRE!', lv >= 2 ? 2 : 1, lv >= 2 ? 430 : 330, '#ffb052', lv >= 3 ? 2 : 0);
+  }
+
+  function activateGoldMode() {
+    const lv = runBuild.coinStorm || 0;
+    if (!lv) return;
+    buildGoldTimer = lv === 1 ? 3 : lv === 2 ? 4 : 5;
+    buildCoinCharge = 0;
+    popText('🪙 GOLD MODE!', W*.5, H*.34, '#ffe36b', .95, 19);
+    burst(player.x + player.w*.5, player.y + player.h*.45, '#ffe36b', 20, 175);
+    beep(980, .10, 'sine', .03);
+  }
+
+  function addEchoLetter() {
+    const lv = runBuild.echo || 0;
+    if (!lv) return;
+    const need = lv >= 2 ? 2 : 3;
+    const cap = lv >= 3 ? 2 : 1;
+    buildEchoProgress++;
+    if (buildEchoProgress >= need) {
+      buildEchoProgress = 0;
+      if (buildEchoShields < cap) {
+        buildEchoShields++;
+        popText(`🔮 ECHO SHIELD ×${buildEchoShields}`, player.x + player.w*.55, player.y - 12, '#e3d4ff', .8, 16);
+        burst(player.x + player.w*.5, player.y + player.h*.45, '#d9c4ff', 14, 135);
+        beep(880, .07, 'sine', .024);
+      }
+    }
+  }
+
   function chooseRunBuild(id) {
     const perk = RUN_BUILD_CATALOG[id];
     if (state !== 'build' || !perk || !pendingRunBuildChoices.includes(id)) return;
     if (runBuild[id] >= perk.maxLevel) return;
     runBuild[id]++;
-    if (id === 'guard') runBuildGuardCharges++;
     pendingRunBuildChoices = [];
     runBuildPanelEl.hidden = true;
     state = 'playing';
@@ -559,7 +662,7 @@
     updateBuildHud();
     popText(`${perk.icon} ${perk.name} Lv.${runBuild[id]}!`, W*.5, H*.31, '#eaffc9', .9, 18);
     burst(player.x + player.w/2, player.y + player.h/2, '#c9f49a', 14, 140);
-    popText('SAFE START! 1.5秒無敵', W*.5, H*.35, '#d9fbff', .8, 16);
+    popText('SAFE START', W*.5, H*.35, '#d9fbff', .55, 14);
     beep(900 + runBuild[id]*35, .08, 'sine', .026);
   }
 
@@ -693,10 +796,18 @@
   let rushMistakes = 0;
   let restartReadyAt = 0;
   let runBuild = createRunBuildState();
-  let runBuildCoinMeter = 0;
   let pendingRunBuildChoices = [];
   let pendingRunBuildCheckpoint = null;
-  let runBuildGuardCharges = 0;
+  let buildBoostTimer = 0;
+  let buildBoostHits = 0;
+  let buildGoldTimer = 0;
+  let buildCoinCharge = 0;
+  let buildBreakerTimer = 0;
+  let buildEchoProgress = 0;
+  let buildEchoShields = 0;
+  let buildAirStepFx = 0;
+  let buildImpactFx = 0;
+  let buildFireFx = 0;
   const RUSH_WARP_DURATION = .95;
   const ROAR_FX_DURATION = .65;
 
@@ -858,10 +969,18 @@
     rushMistakes = 0;
     restartReadyAt = 0;
     runBuild = createRunBuildState();
-    runBuildCoinMeter = 0;
     pendingRunBuildChoices = [];
     pendingRunBuildCheckpoint = null;
-    runBuildGuardCharges = 0;
+    buildBoostTimer = 0;
+    buildBoostHits = 0;
+    buildGoldTimer = 0;
+    buildCoinCharge = 0;
+    buildBreakerTimer = 0;
+    buildEchoProgress = 0;
+    buildEchoShields = 0;
+    buildAirStepFx = 0;
+    buildImpactFx = 0;
+    buildFireFx = 0;
     if (runBuildPanelEl) runBuildPanelEl.hidden = true;
     resetFlowGoals();
     Object.assign(player, {
@@ -1044,8 +1163,7 @@
     const base = chain >= 10 ? 500 : chain >= 6 ? 250 : chain >= 3 ? 120 : 0;
     if (base > 0) {
       const characterBonus = selectedCharacter === 'tiranon' ? tiranonChainBonusRate(characterLevel('tiranon')) : 0;
-      const buildBonus = runBuild.chain * .40;
-      const bonus = Math.round(base * (1 + characterBonus + buildBonus));
+      const bonus = Math.round(base * (1 + characterBonus));
       scoreFloat += bonus;
       score = Math.floor(scoreFloat);
       chainClears++;
@@ -1085,6 +1203,7 @@
     if (near) {
       popText(`ギリギリ！ +${gain}`, player.x + player.w*.7, player.y - 12, '#ffd55a', .85, 18);
       burst(player.x + player.w*.75, player.y + player.h*.45, '#ffd55a', 8, 100);
+      activateNearBoost();
       beep(830, .05, 'square', .028);
     } else if (combo === 3 || combo === 6 || combo === 10) {
       popText(`CHAIN ×${mult}`, player.x + player.w*.8, player.y - 8, '#fff1a8', .8, 17);
@@ -1114,16 +1233,28 @@
   }
 
   function jump() {
-    if (state !== 'playing' || player.jumps >= 2) return;
-    player.vy = player.jumps === 0 ? -720 : -635;
+    const airStepLv = runBuild.airStep || 0;
+    const maxJumps = airStepLv > 0 ? 3 : 2;
+    if (state !== 'playing' || player.jumps >= maxJumps) return;
+    const isAirStep = player.jumps === 2;
+    player.vy = player.jumps === 0 ? -720 : isAirStep ? -470 : -635;
     player.jumps++;
     player.descentTime = 0;
     player.glideStarted = false;
     player.diveActive = false;
     player.pullupFx = 0;
     player.squash = .14;
-    beep(player.jumps === 1 ? 520 : 680, .055, 'square', .035);
-    burst(player.x + player.w * .35, player.y + player.h, '#ffffff', 5, 70);
+    if (isAirStep) {
+      buildAirStepFx = .28;
+      popText('☁️ AIR STEP!', player.x + player.w*.6, player.y - 12, '#dcf8ff', .62, 16);
+      burst(player.x + player.w*.45, player.y + player.h*.75, '#d7f7ff', 16, 150);
+      if (airStepLv >= 2) buildSmashAhead('☁️ WIND!', 1, 300, '#c9f5ff', airStepLv >= 3 ? 3 : 0);
+      beep(820, .055, 'sine', .028);
+    } else {
+      beep(player.jumps === 1 ? 520 : 680, .055, 'square', .035);
+      burst(player.x + player.w * .35, player.y + player.h, '#ffffff', 5, 70);
+    }
+    fireFeverShot();
   }
 
   function pteranIsAirborne() {
@@ -1680,12 +1811,12 @@
     }
 
     const specialItem = pickEquipped(['roar','slow','wing']);
-    if (specialItem && Math.random() < .052 * (1 + runBuild.items * .50)) {
+    if (specialItem && Math.random() < .052) {
       const ix = x + Math.min(patternWidth - 80, 95 + Math.random() * 150);
       addItem(ix, groundY - (112 + Math.random() * 55), specialItem);
     }
 
-    if (Math.random() < .088 * (1 + runBuild.items * .50)) {
+    if (Math.random() < .088) {
       const ix = x + Math.min(patternWidth - 80, 120 + Math.random() * 150);
       addEquippedItem(ix, groundY - (130 + Math.random() * 75), ['shield','magnet','giant']);
     }
@@ -1811,9 +1942,8 @@
         flowRestPatterns = Math.max(flowRestPatterns, ended === 'rush' ? 2 : 1);
         if (ended === 'rush') {
           const perfect = rushMistakes === 0;
-          const rushMult = 1 + runBuild.rush * .50;
-          const rushScore = Math.round((perfect ? 1000 : 500) * rushMult);
-          const rushCoins = Math.round((perfect ? 20 : 10) * rushMult);
+          const rushScore = perfect ? 1000 : 500;
+          const rushCoins = perfect ? 20 : 10;
           scoreFloat += rushScore;
           score = Math.floor(scoreFloat);
           runCoins += rushCoins;
@@ -1822,6 +1952,12 @@
           burst(player.x + player.w/2, player.y + player.h/2, perfect ? '#ffd95f' : '#ffb45f', perfect ? 28 : 18, perfect ? 205 : 160);
           beep(perfect ? 920 : 760, .10, 'square', .032);
           if (perfect) setTimeout(() => beep(1180, .12, 'sine', .026), 80);
+          if (runBuild.rushBreaker > 0) {
+            const lv = runBuild.rushBreaker;
+            buildBreakerTimer = lv === 1 ? 4 : lv === 2 ? 6 : 8;
+            popText(`🌰 RUSH BREAKER ${buildBreakerTimer.toFixed(0)}秒！`, W*.5, H*.36, '#ffd6a0', 1.0, 19);
+            burst(player.x + player.w*.5, player.y + player.h*.45, '#ffbb71', 22, 185);
+          }
           settleChain();
         } else {
           popText('NICE BONUS!', W*.5, H*.30, '#fff5a8', .75, 17);
@@ -1901,6 +2037,13 @@
     rushWarpTimer = Math.max(0, rushWarpTimer - dt);
     roarFx = Math.max(0, roarFx - dt);
     newRecordTimer = Math.max(0, newRecordTimer - dt);
+    buildBoostTimer = Math.max(0, buildBoostTimer - dt);
+    if (buildBoostTimer <= 0) buildBoostHits = 0;
+    buildGoldTimer = Math.max(0, buildGoldTimer - dt);
+    buildBreakerTimer = Math.max(0, buildBreakerTimer - dt);
+    buildAirStepFx = Math.max(0, buildAirStepFx - dt);
+    buildImpactFx = Math.max(0, buildImpactFx - dt);
+    buildFireFx = Math.max(0, buildFireFx - dt);
     if (selectedCharacter === 'stegon') stegonGuardCooldown = Math.max(0, stegonGuardCooldown - dt);
     else stegonGuardCooldown = 0;
     updateEvents(dt);
@@ -1992,7 +2135,9 @@
         player.x + player.w * .78 > o.x &&
         player.x + player.w * .18 < o.x + o.w
       ) {
+        const landingSpeed = player.vy;
         player.y = o.y - player.h;
+        triggerLandingSmash(landingSpeed);
         player.vy = 0;
         player.jumps = 0;
         player.glideHeld = false;
@@ -2005,7 +2150,10 @@
     }
 
     if (player.y + player.h >= groundY) {
+      const landingSpeed = player.vy;
+      const justLanded = prevBottom < groundY - 2 && landingSpeed > 0;
       player.y = groundY - player.h;
+      if (justLanded) triggerLandingSmash(landingSpeed);
       player.vy = 0;
       player.jumps = 0;
       player.glideHeld = false;
@@ -2080,6 +2228,40 @@
       if (o.type === 'platform' || o.type === 'spring') continue;
 
       if (o.type === 'kuri' && rectHit(hurtbox, o, 4)) {
+        if (buildGoldTimer > 0) {
+          const lv = runBuild.coinStorm || 0;
+          const coins = lv >= 3 ? 4 : 2;
+          runCoins += coins;
+          scoreFloat += 45;
+          score = Math.floor(scoreFloat);
+          burst(o.x + o.w/2, o.y + o.h/2, '#ffe36b', 18, 175);
+          popText(`🪙 栗→コイン +${coins}`, player.x + player.w*.65, player.y - 12, '#ffe36b', .6, 15);
+          objects.splice(i, 1);
+          beep(980, .045, 'sine', .02);
+          continue;
+        }
+        if (buildBreakerTimer > 0) {
+          const coins = runBuild.rushBreaker >= 3 ? 2 : 0;
+          if (coins) runCoins += coins;
+          scoreFloat += 55;
+          score = Math.floor(scoreFloat);
+          burst(o.x + o.w/2, o.y + o.h/2, '#ffbd78', 18, 195);
+          objects.splice(i, 1);
+          beep(210, .045, 'square', .025);
+          continue;
+        }
+        if (buildBoostTimer > 0 && buildBoostHits > 0) {
+          buildBoostHits--;
+          const coins = runBuild.nearBoost >= 3 ? 2 : 0;
+          if (coins) runCoins += coins;
+          scoreFloat += 70;
+          score = Math.floor(scoreFloat);
+          burst(o.x + o.w/2, o.y + o.h/2, '#fff09a', 18, 190);
+          popText(`⚡ BOOST BREAK!${coins ? ` 🪙+${coins}` : ''}`, player.x + player.w*.65, player.y - 12, '#fff09a', .6, 15);
+          objects.splice(i, 1);
+          beep(740, .045, 'square', .025);
+          continue;
+        }
         if (eventMode === 'rush') rushMistakes++;
         breakChain();
         if (player.invincible > 0) {
@@ -2139,17 +2321,16 @@
           setTimeout(() => beep(680, .07, 'sine', .025), 70);
           continue;
         }
-        if (runBuildGuardCharges > 0) {
-          runBuildGuardCharges--;
-          player.invincible = Math.max(player.invincible, 1.35);
+        if (buildEchoShields > 0) {
+          buildEchoShields--;
+          player.invincible = Math.max(player.invincible, 1.25);
           flash = .10;
           shake = 5;
-          burst(o.x + o.w/2, o.y + o.h/2, '#c9f4a8', 18, 165);
-          popText(`BUILD GUARD! 残り${runBuildGuardCharges}`, player.x + player.w*.55, player.y - 12, '#e8ffc8', .8, 17);
+          burst(o.x + o.w/2, o.y + o.h/2, '#d9c4ff', 18, 165);
+          popText(`🔮 ECHO BLOCK! 残り${buildEchoShields}`, player.x + player.w*.55, player.y - 12, '#eadfff', .8, 17);
           objects.splice(i, 1);
           updateBuildHud();
-          beep(480, .08, 'square', .03);
-          setTimeout(() => beep(820, .07, 'sine', .022), 65);
+          beep(620, .08, 'sine', .03);
           continue;
         }
         beginDamageGameOver();
@@ -2208,11 +2389,12 @@
   function collectCoin(o) {
     const gain = Math.max(1, Number(o.value || 1));
     runCoins += gain;
-    runBuildCoinMeter += gain * runBuild.coin * .30;
-    const buildCoinExtra = Math.floor(runBuildCoinMeter);
-    if (buildCoinExtra > 0) {
-      runBuildCoinMeter -= buildCoinExtra;
-      runCoins += buildCoinExtra;
+    let buildCoinExtra = 0;
+    if (runBuild.coinStorm > 0 && buildGoldTimer <= 0) {
+      buildCoinCharge += gain;
+      const lv = runBuild.coinStorm;
+      const need = lv === 1 ? 8 : lv === 2 ? 6 : 5;
+      if (buildCoinCharge >= need) activateGoldMode();
     }
     let mininonExtra = 0;
     if (selectedCharacter === 'mininon') {
@@ -2237,10 +2419,11 @@
     scoreFloat += 20 * comboMultiplier();
     score = Math.floor(scoreFloat);
     burst(o.x + o.w/2, o.y + o.h/2, '#ffd85a', 14, 145);
+    addEchoLetter();
     beep(620 + collected * 45, .075, 'sine', .045);
     if (collected >= WORD.length) {
       collected = 0;
-      player.fever = 8 + runBuild.fever * 2.5;
+      player.fever = 8;
       flash = .10;
       eventMode = 'normal';
       eventTimer = 0;
@@ -2330,8 +2513,7 @@
 
   function collectBonus(o) {
     const value = o.value || 1;
-    const routeMult = o.premium ? 1 + runBuild.route * .50 : 1;
-    const gain = Math.round(28 * value * Math.max(1, comboMultiplier()) * routeMult);
+    const gain = Math.round(28 * value * Math.max(1, comboMultiplier()));
     scoreFloat += gain;
     score = Math.floor(scoreFloat);
     burst(o.x + o.w/2, o.y + o.h/2, o.premium ? '#ffd04b' : '#ffe36d', o.premium ? 11 : 8, 110);
@@ -2965,6 +3147,50 @@
     const t = performance.now() * .001;
     const cx = player.x + player.w*.5;
     const cy = player.y + player.h*.48;
+
+    if (buildBoostTimer > 0) {
+      ctx.save();
+      ctx.strokeStyle='rgba(255,232,90,.72)';
+      ctx.lineWidth=2.5;
+      for (let i=0;i<4;i++) {
+        const y=cy-18+i*12;
+        ctx.beginPath();ctx.moveTo(player.x-8,y);ctx.lineTo(player.x-38-Math.sin(t*9+i)*10,y+2);ctx.stroke();
+      }
+      ctx.restore();
+    }
+    if (buildGoldTimer > 0) {
+      ctx.save();
+      ctx.strokeStyle='rgba(255,220,70,.85)';
+      ctx.lineWidth=3;
+      ctx.shadowColor='#ffe36b';ctx.shadowBlur=12;
+      ctx.beginPath();ctx.arc(cx,cy,player.w*.72+8+Math.sin(t*7)*3,0,Math.PI*2);ctx.stroke();
+      ctx.restore();
+    }
+    if (buildBreakerTimer > 0) {
+      ctx.save();
+      ctx.strokeStyle='rgba(255,155,70,.78)';
+      ctx.lineWidth=4;
+      ctx.beginPath();ctx.arc(cx,cy,player.w*.82+Math.sin(t*8)*4,0,Math.PI*2);ctx.stroke();
+      ctx.restore();
+    }
+    if (buildEchoShields > 0) {
+      ctx.save();
+      ctx.strokeStyle='rgba(206,180,255,.78)';
+      ctx.lineWidth=2.5;
+      for (let i=0;i<buildEchoShields;i++) {
+        ctx.beginPath();ctx.arc(cx,cy,player.w*.78+7+i*7,0,Math.PI*2);ctx.stroke();
+      }
+      ctx.restore();
+    }
+    if (buildAirStepFx > 0 || buildImpactFx > 0 || buildFireFx > 0) {
+      ctx.save();
+      const a=Math.max(buildAirStepFx/.28,buildImpactFx/.32,buildFireFx/.22);
+      ctx.globalAlpha=Math.min(1,a);
+      ctx.strokeStyle=buildFireFx>0?'#ffad52':buildImpactFx>0?'#ffd07a':'#d7f7ff';
+      ctx.lineWidth=3;
+      ctx.beginPath();ctx.arc(cx,cy,34+(1-a)*42,0,Math.PI*2);ctx.stroke();
+      ctx.restore();
+    }
 
     if (player.shield) {
       ctx.save();
